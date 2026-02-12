@@ -14,12 +14,14 @@ from rest_framework.views import APIView
 
 from apps.common.api.responses import created_response, error_response, success_response
 from apps.common.health import check_database, check_rabbitmq, check_redis
+from apps.common.permissions import IsOrgManager, IsOrgMember
 from apps.participation.application.use_cases.accept_transfer import AcceptTransferUseCase
 from apps.participation.application.use_cases.batch_checkin import BatchCheckInUseCase
 from apps.participation.application.use_cases.cancel import CancelRegistrationUseCase
 from apps.participation.application.use_cases.cancel_transfer import CancelTransferUseCase
 from apps.participation.application.use_cases.check_in import CheckInUseCase
 from apps.participation.application.use_cases.generate_qr_token import GenerateQRTokenUseCase
+from apps.participation.application.use_cases.generate_wallet_pass import GenerateWalletPassUseCase
 from apps.participation.application.use_cases.get_event_checkin_stats import (
     GetEventCheckInStatsUseCase,
 )
@@ -46,6 +48,10 @@ from apps.participation.infrastructure.repositories import (
     DjangoTicketTransferRepository,
     DjangoVolunteerShiftRepository,
     DjangoWaitlistRepository,
+)
+from apps.participation.infrastructure.wallet import (
+    StubAppleWalletPassGenerator,
+    StubGoogleWalletPassGenerator,
 )
 from apps.participation.presentation.serializers import (
     CancelSerializer,
@@ -396,7 +402,8 @@ class MyShiftsView(APIView):
 class EventCheckInStatsView(APIView):
     """Return live check-in stats for a specific event (volunteer dashboard)."""
 
-    permission_classes = [IsAuthenticated]
+    # org_id is read from query_params["organisation_id"] by IsOrgMember
+    permission_classes = [IsAuthenticated, IsOrgMember]
 
     @extend_schema(
         tags=["Volunteer"],
@@ -453,7 +460,8 @@ class QRTokenView(APIView):
 class BatchCheckInView(APIView):
     """POST /check-in/batch/ - sync offline QR check-ins after connectivity restored."""
 
-    permission_classes = [IsAuthenticated]
+    # org_id is read from request.data["organisation_id"] by IsOrgManager
+    permission_classes = [IsAuthenticated, IsOrgManager]
 
     @extend_schema(
         tags=["Offline QR"],
@@ -904,3 +912,48 @@ class CancelTransferView(APIView):
             user_id=_UUID(str(request.user.id)),
         )
         return success_response({}, request=request)
+
+
+class WalletPassView(APIView):
+    """Return a wallet pass payload for a confirmed registration."""
+
+    permission_classes = [IsAuthenticated]
+
+    _generators = {
+        "apple": StubAppleWalletPassGenerator(),
+        "google": StubGoogleWalletPassGenerator(),
+    }
+
+    @extend_schema(
+        tags=["Wallet"],
+        summary="Get wallet pass",
+        description=(
+            "Returns an Apple (.pkpass) or Google Wallet JWT payload for the given confirmed "
+            "registration. pass_type must be 'apple' or 'google'."
+        ),
+        responses={
+            200: OpenApiResponse(description="Wallet pass payload returned."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+            404: OpenApiResponse(description="Registration not found."),
+            422: OpenApiResponse(description="Registration is not confirmed."),
+        },
+    )
+    def get(self, request: Request, registration_id: _UUID, pass_type: str) -> Response:
+        """Generate and return the wallet pass payload."""
+        result = GenerateWalletPassUseCase(
+            registration_repo=DjangoRegistrationRepository(),
+            generators=self._generators,
+        ).execute(
+            registration_id=registration_id,
+            user_id=_UUID(str(request.user.id)),
+            pass_type=pass_type,
+        )
+        return success_response(
+            {
+                "registration_id": str(result.registration_id),
+                "pass_type": result.pass_type,
+                "payload": result.payload,
+                "generated_at": result.generated_at.isoformat(),
+            },
+            request=request,
+        )
