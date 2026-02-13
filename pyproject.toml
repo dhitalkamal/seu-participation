@@ -17,6 +17,8 @@ dependencies = [
     "cryptography>=48.0.0",
     "celery[redis]>=5.3",
     "django-celery-beat>=2.6",
+    "reportlab>=4.0",
+    "qrcode>=8.0",
 ]
 
 [dependency-groups]

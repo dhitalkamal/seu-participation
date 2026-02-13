@@ -19,8 +19,10 @@ from .views import (
     QRTokenView,
     RegisterView,
     RegistrationDetailView,
+    TicketPdfView,
     WaitlistAcceptView,
     WaitlistDeclineView,
+    WalletPassView,
 )
 
 urlpatterns: list[URLPattern] = [
@@ -56,6 +58,11 @@ urlpatterns: list[URLPattern] = [
         name="internal-participation-context",
     ),
     path(
+        "registrations/<uuid:registration_id>/ticket-pdf/",
+        TicketPdfView.as_view(),
+        name="registration-ticket-pdf",
+    ),
+    path(
         "registrations/<uuid:registration_id>/transfer/",
         InitiateTransferView.as_view(),
         name="registration-initiate-transfer",
@@ -69,5 +76,10 @@ urlpatterns: list[URLPattern] = [
         "transfers/<uuid:transfer_id>/",
         CancelTransferView.as_view(),
         name="transfer-cancel",
+    ),
+    path(
+        "registrations/<uuid:registration_id>/wallet/<str:pass_type>/",
+        WalletPassView.as_view(),
+        name="registration-wallet-pass",
     ),
 ]

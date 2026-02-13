@@ -914,6 +914,54 @@ class CancelTransferView(APIView):
         return success_response({}, request=request)
 
 
+class TicketPdfView(APIView):
+    """Return a PDF ticket for a confirmed registration."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Registrations"],
+        summary="Download PDF ticket",
+        description=(
+            "Generates and returns a PDF ticket for the given registration. "
+            "The PDF includes the event title, date, attendee name, QR code, and registration code."
+        ),
+        responses={
+            200: OpenApiResponse(description="PDF file returned (application/pdf)."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+            404: OpenApiResponse(description="Registration not found."),
+        },
+    )
+    def get(self, request: Request, registration_id: _UUID) -> Response:
+        """Generate the PDF and return it as a file response."""
+        from django.http import HttpResponse
+
+        from apps.participation.application.use_cases.generate_ticket_pdf import (
+            GenerateTicketPdfUseCase,
+        )
+        from apps.participation.domain.exceptions import RegistrationNotFoundError
+
+        try:
+            pdf_bytes = GenerateTicketPdfUseCase(DjangoRegistrationRepository()).execute(
+                registration_id=registration_id,
+                user_id=_UUID(str(request.user.id)),
+                attendee_name=request.user.token.get("full_name", "Attendee")
+                if hasattr(request.user, "token")
+                else "Attendee",
+            )
+        except RegistrationNotFoundError:
+            return error_response(
+                code="ERR_REGISTRATION_NOT_FOUND",
+                message="Registration not found.",
+                http_status=404,
+                request=request,
+            )
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="ticket-{registration_id}.pdf"'
+        return response
+
+
 class WalletPassView(APIView):
     """Return a wallet pass payload for a confirmed registration."""
 
