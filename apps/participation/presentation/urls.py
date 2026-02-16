@@ -19,6 +19,8 @@ from .views import (
     QRTokenView,
     RegisterView,
     RegistrationDetailView,
+    SavedEventDeleteView,
+    SavedEventListCreateView,
     TicketPdfView,
     WaitlistAcceptView,
     WaitlistDeclineView,
@@ -61,6 +63,12 @@ urlpatterns: list[URLPattern] = [
         "registrations/<uuid:registration_id>/ticket-pdf/",
         TicketPdfView.as_view(),
         name="registration-ticket-pdf",
+    ),
+    path("saved-events/", SavedEventListCreateView.as_view(), name="saved-events-list-create"),
+    path(
+        "saved-events/<uuid:event_id>/",
+        SavedEventDeleteView.as_view(),
+        name="saved-events-delete",
     ),
     path(
         "registrations/<uuid:registration_id>/transfer/",

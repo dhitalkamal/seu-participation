@@ -49,6 +49,7 @@ from apps.participation.infrastructure.repositories import (
     DjangoVolunteerShiftRepository,
     DjangoWaitlistRepository,
 )
+from apps.participation.infrastructure.saved_events_models import SavedEvent
 from apps.participation.infrastructure.wallet import (
     StubAppleWalletPassGenerator,
     StubGoogleWalletPassGenerator,
@@ -912,6 +913,105 @@ class CancelTransferView(APIView):
             user_id=_UUID(str(request.user.id)),
         )
         return success_response({}, request=request)
+
+
+class SavedEventListCreateView(APIView):
+    """List saved events for the authenticated user or save a new event."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Saved Events"],
+        summary="List saved events",
+        description="Returns all events saved/bookmarked by the authenticated user.",
+        responses={
+            200: OpenApiResponse(description="List of saved events."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+        },
+    )
+    def get(self, request: Request) -> Response:
+        """Return all saved events for the authenticated user."""
+        user_id = _UUID(str(request.user.id))
+        saved = SavedEvent.objects.filter(user_id=user_id).order_by("-saved_at")
+        data = [
+            {
+                "id": str(s.id),
+                "event_id": str(s.event_id),
+                "saved_at": s.saved_at.isoformat(),
+            }
+            for s in saved
+        ]
+        return success_response(data, request=request)
+
+    @extend_schema(
+        tags=["Saved Events"],
+        summary="Save an event",
+        description="Bookmark an event for later. Body must include event_id.",
+        responses={
+            201: OpenApiResponse(description="Event saved."),
+            400: OpenApiResponse(description="event_id missing or invalid."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+            409: OpenApiResponse(description="Event already saved."),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        """Save the event to the authenticated user's saved list."""
+        from rest_framework import serializers as drf_serializers
+
+        class _S(drf_serializers.Serializer):
+            event_id = drf_serializers.UUIDField()
+
+        ser = _S(data=request.data)
+        ser.is_valid(raise_exception=True)
+        user_id = _UUID(str(request.user.id))
+        event_id = ser.validated_data["event_id"]
+
+        if SavedEvent.objects.filter(user_id=user_id, event_id=event_id).exists():
+            return error_response(
+                code="ERR_ALREADY_SAVED",
+                message="Event already saved.",
+                http_status=409,
+                request=request,
+            )
+
+        saved = SavedEvent.objects.create(user_id=user_id, event_id=event_id)
+        return created_response(
+            {
+                "id": str(saved.id),
+                "event_id": str(saved.event_id),
+                "saved_at": saved.saved_at.isoformat(),
+            },
+            request=request,
+        )
+
+
+class SavedEventDeleteView(APIView):
+    """Remove an event from the authenticated user's saved list."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Saved Events"],
+        summary="Unsave an event",
+        description="Remove an event from the authenticated user's saved list.",
+        responses={
+            200: OpenApiResponse(description="Event unsaved."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+            404: OpenApiResponse(description="Event was not saved."),
+        },
+    )
+    def delete(self, request: Request, event_id: _UUID) -> Response:
+        """Delete the saved event record if it exists."""
+        user_id = _UUID(str(request.user.id))
+        deleted_count, _ = SavedEvent.objects.filter(user_id=user_id, event_id=event_id).delete()
+        if not deleted_count:
+            return error_response(
+                code="ERR_SAVED_EVENT_NOT_FOUND",
+                message="Saved event not found.",
+                http_status=404,
+                request=request,
+            )
+        return success_response({"unsaved": True}, request=request)
 
 
 class TicketPdfView(APIView):
