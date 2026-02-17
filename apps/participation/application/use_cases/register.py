@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import random
 import string
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from apps.participation.domain.entities import RegistrationEntity, WaitlistEntryEntity
 from apps.participation.domain.exceptions import AlreadyRegisteredError, ParticipationConflictError
@@ -17,6 +19,8 @@ from apps.participation.domain.repositories import (
     IWaitlistRepository,
 )
 
+logger = logging.getLogger(__name__)
+
 # ! waitlist slots expire after 24 hours  - promoted user must act within this window
 _WAITLIST_EXPIRY_HOURS = 24
 
@@ -24,6 +28,34 @@ _WAITLIST_EXPIRY_HOURS = 24
 def _generate_code() -> str:
     """Generate a unique 8-character alphanumeric registration code."""
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+
+def _redis_key(event_id: uuid.UUID) -> str:
+    """Return the Redis capacity key for the given event."""
+    return f"event_capacity:{event_id}"
+
+
+def _is_at_capacity_redis(event_id: uuid.UUID, event_capacity: int, redis_client: Any) -> bool:
+    """
+    Check Redis for the current registered count. Falls back to True when Redis fails.
+
+    Uses Redis as the fast path; on any error returns None to signal fallback.
+
+    @param event_id - the event to check
+    @param event_capacity - the authoritative capacity from event-service
+    @param redis_client - a Redis connection or compatible client
+    @returns True if at capacity, False if not, or re-raises to trigger fallback
+    """
+    try:
+        raw = redis_client.get(_redis_key(event_id))
+        if raw is None:
+            return False  # no counter seeded yet, treat as not full
+        return int(raw) >= event_capacity
+    except Exception:
+        logger.warning(
+            "Redis unavailable for capacity check on event %s, falling back to DB", event_id
+        )
+        raise  # caller catches and falls back to event summary
 
 
 class RegisterForEventUseCase:
@@ -36,12 +68,14 @@ class RegisterForEventUseCase:
         event_client: IEventClient,
         publisher: IEventPublisher | None = None,
         context_repo: IParticipationContextRepository | None = None,
+        redis_client: Any | None = None,
     ) -> None:
         self._regs = reg_repo
         self._waitlist = waitlist_repo
         self._events = event_client
         self._publisher = publisher
         self._context = context_repo
+        self._redis = redis_client
 
     def execute(
         self,
@@ -55,6 +89,9 @@ class RegisterForEventUseCase:
     ) -> RegistrationEntity | WaitlistEntryEntity:
         """
         Check event capacity and either create a confirmed registration or a waitlist entry.
+
+        When a Redis client is provided, capacity is read from Redis first for speed.
+        Falls back to the event-service response if Redis is unavailable.
 
         @param event_id - the event to register for
         @param user_id - UUID from the JWT
@@ -82,7 +119,16 @@ class RegisterForEventUseCase:
 
         now = datetime.now(timezone.utc)
 
-        if event.is_at_capacity:
+        # fast-path capacity check via Redis; fall back to event summary on failure
+        if self._redis is not None:
+            try:
+                at_capacity = _is_at_capacity_redis(event_id, event.capacity, self._redis)
+            except Exception:
+                at_capacity = event.is_at_capacity
+        else:
+            at_capacity = event.is_at_capacity
+
+        if at_capacity:
             position = self._waitlist.count_for_event(event_id) + 1
             entry = WaitlistEntryEntity(
                 id=uuid.uuid4(),
@@ -134,4 +180,12 @@ class RegisterForEventUseCase:
                     "networking_opt_in": created.networking_opt_in,
                 },
             )
+
+        # atomically increment Redis counter; failure is non-fatal
+        if self._redis is not None:
+            try:
+                self._redis.incr(_redis_key(event_id))
+            except Exception:
+                logger.warning("Redis INCR failed for event_capacity:%s", event_id)
+
         return created

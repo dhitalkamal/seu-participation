@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from apps.participation.application.use_cases.promote_waitlist import (
     PromoteNextWaitlistUseCase,
@@ -20,8 +22,15 @@ from apps.participation.domain.repositories import (
     IWaitlistRepository,
 )
 
+logger = logging.getLogger(__name__)
+
 # ! exactly these statuses are cancellable, no others
 _CANCELLABLE: frozenset[str] = frozenset({"pending", "confirmed", "waitlisted"})
+
+
+def _redis_key(event_id: uuid.UUID) -> str:
+    """Return the Redis capacity key for the given event."""
+    return f"event_capacity:{event_id}"
 
 
 class CancelRegistrationUseCase:
@@ -33,11 +42,13 @@ class CancelRegistrationUseCase:
         waitlist_repo: IWaitlistRepository,
         publisher: IEventPublisher | None = None,
         context_repo: IParticipationContextRepository | None = None,
+        redis_client: Any | None = None,
     ) -> None:
         self._regs = reg_repo
         self._waitlist = waitlist_repo
         self._publisher = publisher
         self._context = context_repo
+        self._redis = redis_client
 
     def execute(
         self, *, registration_id: uuid.UUID, user_id: uuid.UUID, email: str = ""
@@ -89,5 +100,12 @@ class CancelRegistrationUseCase:
                     "email": email,
                 },
             )
+
+        # atomically decrement Redis counter; failure is non-fatal
+        if self._redis is not None:
+            try:
+                self._redis.decr(_redis_key(registration.event_id))
+            except Exception:
+                logger.warning("Redis DECR failed for event_capacity:%s", registration.event_id)
 
         return registration
