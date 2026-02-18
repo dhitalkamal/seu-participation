@@ -337,16 +337,44 @@ class CheckInView(APIView):
         },
     )
     def post(self, request: Request) -> Response:
-        """Validate the registration code and record the check-in."""
+        """Validate the registration code and record the check-in.
+
+        Accepts two formats for registration_code:
+        - plain 8-char code (<=20 chars): used directly
+        - encrypted QR token (>20 chars): decrypted via ValidateQRTokenUseCase first
+        """
         ser = _CHECKIN_SER(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
+
+        registration_code = d["registration_code"]
+
+        # detect and decrypt encrypted QR tokens from mobile scanner
+        if len(registration_code) > 20:
+            event_id = d.get("event_id")
+            if not event_id:
+                return error_response(
+                    code="ERR_CHECKIN_EVENT_ID_REQUIRED",
+                    message="event_id is required when registration_code is an encrypted QR token.",
+                    http_status=400,
+                    request=request,
+                )
+            try:
+                payload = _VALIDATE_QR_UC().execute(token=registration_code, event_id=event_id)
+            except _INVALID_QR_ERROR as exc:
+                return error_response(
+                    code="ERR_CHECKIN_INVALID_QR",
+                    message=str(exc),
+                    http_status=400,
+                    request=request,
+                )
+            registration_code = payload["registration_code"]
 
         result = _CHECKIN_UC(
             reg_repo=_REG_REPO(),
             check_in_repo=_CHECKIN_REPO(),
         ).execute(
-            registration_code=d["registration_code"],
+            registration_code=registration_code,
             method=d["method"],
             staff_user_id=uuid.UUID(str(request.user.id)),
         )
