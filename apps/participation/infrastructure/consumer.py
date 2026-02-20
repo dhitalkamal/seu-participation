@@ -4,18 +4,23 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 
 import pika
 from django.conf import settings
 
-from apps.participation.infrastructure.repositories import DjangoRegistrationRepository
+from apps.participation.infrastructure.repositories import (
+    DjangoParticipationContextRepository,
+    DjangoRegistrationRepository,
+)
 
 logger = logging.getLogger(__name__)
 
 _EXCHANGE = "sansaar"
 _EXCHANGE_TYPE = "topic"
 _QUEUE = "participation.events"
-_ROUTING_KEY = "payment.#"
+# routing keys this queue subscribes to
+_ROUTING_KEYS = ["payment.#", "volunteer.#"]
 
 
 def _handle_order_completed(payload: dict) -> None:
@@ -27,8 +32,6 @@ def _handle_order_completed(payload: dict) -> None:
 
     repo = DjangoRegistrationRepository()
     try:
-        import uuid
-
         reg = repo.get_by_id(uuid.UUID(registration_id))
         if reg.status == "pending":
             reg.status = "confirmed"
@@ -38,8 +41,33 @@ def _handle_order_completed(payload: dict) -> None:
         logger.exception("Failed to confirm registration %s.", registration_id)
 
 
+def _handle_volunteer_approved(payload: dict) -> None:
+    """Set the participation context to 'volunteer' when an application is approved."""
+    user_id_str = payload.get("user_id")
+    event_id_str = payload.get("event_id")
+    if not user_id_str or not event_id_str:
+        logger.warning("volunteer.application.approved missing user_id or event_id: %s", payload)
+        return
+
+    try:
+        context_repo = DjangoParticipationContextRepository()
+        context_repo.set_context(
+            uuid.UUID(event_id_str),
+            uuid.UUID(user_id_str),
+            "volunteer",
+        )
+        logger.info("Volunteer context set for user %s on event %s.", user_id_str, event_id_str)
+    except Exception:
+        logger.exception(
+            "Failed to set volunteer context for user %s on event %s.",
+            user_id_str,
+            event_id_str,
+        )
+
+
 _HANDLERS: dict = {
     "payment.order.completed": _handle_order_completed,
+    "volunteer.application.approved": _handle_volunteer_approved,
 }
 
 
@@ -57,7 +85,7 @@ def _handle_message(
         if handler:
             handler(payload)
         else:
-            logger.debug("No handler for event %s — acking.", event_name)
+            logger.debug("No handler for event %s, acking.", event_name)
     except Exception:
         logger.exception("Error processing event %s.", event_name)
     finally:
@@ -72,9 +100,13 @@ def start_consumer() -> None:
 
     channel.exchange_declare(exchange=_EXCHANGE, exchange_type=_EXCHANGE_TYPE, durable=True)
     channel.queue_declare(queue=_QUEUE, durable=True)
-    channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key=_ROUTING_KEY)
+
+    # bind each routing key pattern to this queue
+    for routing_key in _ROUTING_KEYS:
+        channel.queue_bind(queue=_QUEUE, exchange=_EXCHANGE, routing_key=routing_key)
+
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(queue=_QUEUE, on_message_callback=_handle_message)
 
-    logger.info("Participation consumer started. Waiting for messages on %s.", _ROUTING_KEY)
+    logger.info("Participation consumer started. Waiting for messages on %s.", _ROUTING_KEYS)
     channel.start_consuming()
