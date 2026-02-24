@@ -49,6 +49,9 @@ class WaitlistEntryEntity:
     status: str = "pending"
     offered_at: datetime | None = None
     expires_at: datetime | None = None
+    # * stored on creation so notification-service can email the user when promoted
+    email: str = ""
+    first_name: str = ""
 
 
 @dataclass(slots=True)
@@ -181,3 +184,15 @@ class EventSummary:
     def is_at_capacity(self) -> bool:
         """True when no spots remain."""
         return self.registered_count >= self.capacity
+
+
+@dataclass(slots=True)
+class WalletPassEntity:
+    """A generated wallet pass (Apple or Google) for a confirmed registration."""
+
+    registration_id: uuid.UUID
+    user_id: uuid.UUID
+    event_id: uuid.UUID
+    pass_type: str
+    payload: str
+    generated_at: datetime

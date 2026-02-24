@@ -92,11 +92,18 @@ def test_register_publishes_registration_created_event():
         waitlist_repo=FakeWaitlistRepository(),
         event_client=FakeEventClient(event),
         publisher=publisher,
-    ).execute(event_id=event.event_id, user_id=uuid.uuid4())
+    ).execute(
+        event_id=event.event_id,
+        user_id=uuid.uuid4(),
+        email="reg@example.com",
+        first_name="Bob",
+    )
     assert isinstance(result, RegistrationEntity)
     assert len(publisher.events) == 1
     assert publisher.events[0]["routing_key"] == "participation.registration.created"
     assert publisher.events[0]["payload"]["registration_code"] == result.registration_code
+    assert publisher.events[0]["payload"]["first_name"] == "Bob"
+    assert publisher.events[0]["payload"]["email"] == "reg@example.com"
 
 
 def test_register_waitlist_does_not_publish_registration_created():

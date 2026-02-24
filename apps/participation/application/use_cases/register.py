@@ -85,6 +85,7 @@ class RegisterForEventUseCase:
         quantity: int = 1,
         notes: str | None = None,
         email: str = "",
+        first_name: str = "",
         networking_opt_in: bool = False,
     ) -> RegistrationEntity | WaitlistEntryEntity:
         """
@@ -93,10 +94,11 @@ class RegisterForEventUseCase:
         When a Redis client is provided, capacity is read from Redis first for speed.
         Falls back to the event-service response if Redis is unavailable.
 
-        @param event_id - the event to register for
-        @param user_id - UUID from the JWT
-        @param quantity - number of tickets, defaults to 1
-        @param email - user email from JWT claims, forwarded to domain events for notifications
+        @param event_id    - the event to register for
+        @param user_id     - UUID from the JWT
+        @param quantity    - number of tickets, defaults to 1
+        @param email       - user email from JWT claims, forwarded to domain events
+        @param first_name  - user's first name from JWT claims, used for email personalisation
         @returns RegistrationEntity if a spot is available, WaitlistEntryEntity if full
         @raises EventNotFoundError if the event-service returns 404 or is unreachable
         @raises AlreadyRegisteredError if a non-cancelled registration or waitlist entry exists
@@ -137,6 +139,8 @@ class RegisterForEventUseCase:
                 position=position,
                 created_at=now,
                 expires_at=now + timedelta(hours=_WAITLIST_EXPIRY_HOURS),
+                email=email,
+                first_name=first_name,
             )
             created_entry = self._waitlist.add(entry)
             if self._publisher is not None:
@@ -147,6 +151,7 @@ class RegisterForEventUseCase:
                         "event_id": str(event_id),
                         "position": position,
                         "email": email,
+                        "first_name": first_name,
                     },
                 )
             return created_entry
@@ -177,6 +182,7 @@ class RegisterForEventUseCase:
                     "registration_id": str(created.id),
                     "registration_code": created.registration_code,
                     "email": email,
+                    "first_name": first_name,
                     "networking_opt_in": created.networking_opt_in,
                 },
             )

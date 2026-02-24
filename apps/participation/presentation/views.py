@@ -275,6 +275,7 @@ class RegisterView(APIView):
             quantity=d["quantity"],
             notes=d.get("notes"),
             email=request.user.token.get("email", ""),
+            first_name=request.user.token.get("first_name", ""),
             networking_opt_in=d.get("networking_opt_in", False),
         )
 

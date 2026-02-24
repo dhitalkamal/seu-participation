@@ -63,7 +63,12 @@ def test_promote_sets_24h_expiry():
 def test_promote_publishes_waitlist_promoted_event():
     """Promotion publishes participation.waitlist.promoted with correct payload."""
     event_id = uuid.uuid4()
-    entry = make_waitlist_entry(event_id=event_id, position=1)
+    entry = make_waitlist_entry(
+        event_id=event_id,
+        position=1,
+        email="user@example.com",
+        first_name="Alice",
+    )
     publisher = FakeEventPublisher()
 
     from apps.participation.application.use_cases.promote_waitlist import (
@@ -82,6 +87,8 @@ def test_promote_publishes_waitlist_promoted_event():
     assert promoted["payload"]["user_id"] == str(entry.user_id)
     assert promoted["payload"]["event_id"] == str(event_id)
     assert promoted["payload"]["entry_id"] == str(entry.id)
+    assert promoted["payload"]["email"] == "user@example.com"
+    assert promoted["payload"]["first_name"] == "Alice"
 
 
 def test_promote_does_nothing_when_queue_empty():

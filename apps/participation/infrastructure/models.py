@@ -149,6 +149,9 @@ class WaitlistEntry(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     offered_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
+    # * email stored so notification-service can reach the user on promotion
+    email = models.EmailField(blank=True, default="")
+    first_name = models.CharField(max_length=150, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def to_entity(self) -> WaitlistEntryEntity:
@@ -162,6 +165,8 @@ class WaitlistEntry(models.Model):
             status=self.status,
             offered_at=self.offered_at,
             expires_at=self.expires_at,
+            email=self.email or "",
+            first_name=self.first_name or "",
         )
 
     @classmethod
@@ -175,6 +180,8 @@ class WaitlistEntry(models.Model):
             status=entity.status,
             offered_at=entity.offered_at,
             expires_at=entity.expires_at,
+            email=entity.email,
+            first_name=entity.first_name,
         )
 
 

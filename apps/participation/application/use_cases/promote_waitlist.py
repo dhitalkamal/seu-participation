@@ -50,5 +50,7 @@ class PromoteNextWaitlistUseCase:
                 "user_id": str(entry.user_id),
                 "event_id": str(event_id),
                 "entry_id": str(entry.id),
+                "email": entry.email,
+                "first_name": entry.first_name,
             },
         )

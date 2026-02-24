@@ -37,6 +37,8 @@ def make_waitlist_entry(**kwargs: object) -> WaitlistEntryEntity:
         "status": "pending",
         "offered_at": None,
         "expires_at": None,
+        "email": "waitlist@example.com",
+        "first_name": "Test",
     }
     defaults.update(kwargs)
     return WaitlistEntryEntity(**defaults)  # type: ignore[arg-type]
