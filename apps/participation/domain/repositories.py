@@ -12,6 +12,7 @@ from apps.participation.domain.entities import (
     RegistrationEntity,
     TicketTransferEntity,
     WaitlistEntryEntity,
+    WalletPassEntity,
 )
 
 
@@ -133,3 +134,10 @@ class ITicketTransferRepository(ABC):
 
     @abstractmethod
     def update(self, entity: TicketTransferEntity) -> TicketTransferEntity: ...
+
+
+class IWalletPassGenerator(ABC):
+    """Port for generating Apple or Google Wallet passes from a registration."""
+
+    @abstractmethod
+    def generate(self, registration: RegistrationEntity) -> WalletPassEntity: ...
