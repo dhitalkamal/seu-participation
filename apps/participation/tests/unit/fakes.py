@@ -72,12 +72,14 @@ def make_event_summary(
     event_id: uuid.UUID | None = None,
     capacity: int = 100,
     registered_count: int = 0,
+    overbooking_percent: int = 0,
 ) -> EventSummary:
     """Build an EventSummary with sensible defaults for testing."""
     return EventSummary(
         event_id=event_id or uuid.uuid4(),
         capacity=capacity,
         registered_count=registered_count,
+        overbooking_percent=overbooking_percent,
     )
 
 

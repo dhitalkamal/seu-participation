@@ -179,11 +179,17 @@ class EventSummary:
     event_id: uuid.UUID
     capacity: int
     registered_count: int
+    # percentage by which the event allows registrations beyond stated capacity
+    overbooking_percent: int = 0
 
     @property
     def is_at_capacity(self) -> bool:
-        """True when no spots remain."""
-        return self.registered_count >= self.capacity
+        """True when no spots remain, accounting for overbooking allowance.
+
+        Effective capacity = capacity * (1 + overbooking_percent / 100).
+        """
+        effective = self.capacity * (1 + self.overbooking_percent / 100.0)
+        return self.registered_count >= effective
 
 
 @dataclass(slots=True)

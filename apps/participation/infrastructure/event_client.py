@@ -34,6 +34,7 @@ class HttpEventClient(IEventClient):
                     event_id=uuid.UUID(data["id"]),
                     capacity=data["capacity"],
                     registered_count=data["registered_count"],
+                    overbooking_percent=data.get("overbooking_percent", 0),
                 )
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
