@@ -1,7 +1,7 @@
 [project]
 name = "participation-service"
 version = "0.1.0"
-description = "Event registration and check-in service for Sansaar"
+description = "Event registration and check-in service for the Sansaar platform."
 requires-python = ">=3.13"
 dependencies = [
     "django>=5.2",
@@ -13,6 +13,7 @@ dependencies = [
     "gunicorn",
     "redis",
     "pika",
+    "drf-spectacular",
 ]
 
 [dependency-groups]
