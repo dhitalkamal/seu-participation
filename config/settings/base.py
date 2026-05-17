@@ -1,4 +1,5 @@
 """Base Django settings for the participation-service."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -87,7 +88,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework_simplejwt.authentication.JWTTokenUserAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -109,6 +110,7 @@ CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
 
 REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
 RABBITMQ_URL = config("RABBITMQ_URL", default="amqp://guest:guest@localhost:5672/")
+EVENT_SERVICE_URL = config("EVENT_SERVICE_URL", default="http://event:8002")
 
 CACHES = {
     "default": {

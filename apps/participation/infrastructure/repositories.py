@@ -1,2 +1,100 @@
 """Concrete repository implementations backed by the Django ORM."""
+
 from __future__ import annotations
+
+import uuid
+
+from apps.participation.domain.entities import (
+    CheckInEntity,
+    RegistrationEntity,
+    WaitlistEntryEntity,
+)
+from apps.participation.domain.exceptions import RegistrationNotFoundError
+from apps.participation.domain.repositories import (
+    ICheckInRepository,
+    IRegistrationRepository,
+    IWaitlistRepository,
+)
+from apps.participation.infrastructure.models import CheckIn, Registration, WaitlistEntry
+
+
+class DjangoRegistrationRepository(IRegistrationRepository):
+    """Persists Registration entities using the Django ORM."""
+
+    def create(self, entity: RegistrationEntity) -> RegistrationEntity:
+        """Persist a new registration and return the saved entity."""
+        obj = Registration.from_entity(entity)
+        obj.save(using="default")
+        return obj.to_entity()
+
+    def get_by_id(self, registration_id: uuid.UUID) -> RegistrationEntity:
+        """Fetch by id. Raises RegistrationNotFoundError if absent."""
+        try:
+            return Registration.objects.get(id=registration_id).to_entity()
+        except Registration.DoesNotExist:
+            raise RegistrationNotFoundError("Registration not found.")
+
+    def get_by_code(self, code: str) -> RegistrationEntity:
+        """Fetch by registration_code. Raises RegistrationNotFoundError if absent."""
+        try:
+            return Registration.objects.get(registration_code=code).to_entity()
+        except Registration.DoesNotExist:
+            raise RegistrationNotFoundError("Registration not found.")
+
+    def has_active(self, event_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+        """True if a non-cancelled registration exists for this (event, user) pair."""
+        return (
+            Registration.objects.filter(event_id=event_id, user_id=user_id)
+            .exclude(status="cancelled")
+            .exists()
+        )
+
+    def update(self, entity: RegistrationEntity) -> RegistrationEntity:
+        """Fetch the existing row, update mutable fields, and save."""
+        obj = Registration.objects.get(id=entity.id)
+        obj.status = entity.status
+        obj.checked_in_at = entity.checked_in_at
+        obj.cancelled_at = entity.cancelled_at
+        obj.save()
+        return obj.to_entity()
+
+
+class DjangoCheckInRepository(ICheckInRepository):
+    """Persists CheckIn entities using the Django ORM."""
+
+    def create(self, entity: CheckInEntity) -> CheckInEntity:
+        """Persist a new check-in and return the saved entity."""
+        obj = CheckIn.from_entity(entity)
+        obj.save(using="default")
+        return obj.to_entity()
+
+    def exists_for_registration(self, registration_id: uuid.UUID) -> bool:
+        """True if a check-in already exists for this registration."""
+        return CheckIn.objects.filter(registration_id=registration_id).exists()
+
+
+class DjangoWaitlistRepository(IWaitlistRepository):
+    """Persists WaitlistEntry entities using the Django ORM."""
+
+    def add(self, entity: WaitlistEntryEntity) -> WaitlistEntryEntity:
+        """Persist a new waitlist entry and return the saved entity."""
+        obj = WaitlistEntry.from_entity(entity)
+        obj.save(using="default")
+        return obj.to_entity()
+
+    def has_entry(self, event_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+        """True if the user is already in the waitlist for this event."""
+        return WaitlistEntry.objects.filter(event_id=event_id, user_id=user_id).exists()
+
+    def next_in_queue(self, event_id: uuid.UUID) -> WaitlistEntryEntity | None:
+        """Return the entry with the lowest position, or None if the queue is empty."""
+        obj = WaitlistEntry.objects.filter(event_id=event_id).order_by("position").first()
+        return obj.to_entity() if obj else None
+
+    def remove(self, entry_id: uuid.UUID) -> None:
+        """Delete the waitlist entry by id."""
+        WaitlistEntry.objects.filter(id=entry_id).delete()
+
+    def count_for_event(self, event_id: uuid.UUID) -> int:
+        """Count all waitlist entries for this event (used for position calculation)."""
+        return WaitlistEntry.objects.filter(event_id=event_id).count()
