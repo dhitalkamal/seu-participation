@@ -58,6 +58,22 @@ class DjangoRegistrationRepository(IRegistrationRepository):
         obj.save()
         return obj.to_entity()
 
+    def list_by_user(self, user_id: object) -> list[RegistrationEntity]:
+        """Return all registrations for this user, newest first."""
+        return [
+            obj.to_entity()
+            for obj in Registration.objects.filter(user_id=user_id).order_by("-created_at")
+        ]
+
+    def get_by_id_for_user(
+        self, registration_id: uuid.UUID, user_id: uuid.UUID
+    ) -> RegistrationEntity:
+        """Fetch by id, enforcing ownership. Raises RegistrationNotFoundError if absent or not owned."""
+        try:
+            return Registration.objects.get(id=registration_id, user_id=user_id).to_entity()
+        except Registration.DoesNotExist:
+            raise RegistrationNotFoundError("Registration not found.")
+
 
 class DjangoCheckInRepository(ICheckInRepository):
     """Persists CheckIn entities using the Django ORM."""

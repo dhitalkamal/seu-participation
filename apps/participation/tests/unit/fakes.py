@@ -95,6 +95,19 @@ class FakeRegistrationRepository(IRegistrationRepository):
         self._store[entity.id] = entity
         return entity
 
+    def list_by_user(self, user_id: uuid.UUID) -> list[RegistrationEntity]:
+        """Return all registrations owned by the user."""
+        return [r for r in self._store.values() if r.user_id == user_id]
+
+    def get_by_id_for_user(
+        self, registration_id: uuid.UUID, user_id: uuid.UUID
+    ) -> RegistrationEntity:
+        """Return the registration if it exists and belongs to user_id."""
+        entity = self._store.get(registration_id)
+        if entity is None or entity.user_id != user_id:
+            raise RegistrationNotFoundError("Registration not found.")
+        return entity
+
 
 class FakeCheckInRepository(ICheckInRepository):
     """In-memory check-in store."""

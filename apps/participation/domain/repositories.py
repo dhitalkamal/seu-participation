@@ -31,6 +31,14 @@ class IRegistrationRepository(ABC):
     @abstractmethod
     def update(self, entity: RegistrationEntity) -> RegistrationEntity: ...
 
+    @abstractmethod
+    def list_by_user(self, user_id: uuid.UUID) -> list[RegistrationEntity]: ...
+
+    @abstractmethod
+    def get_by_id_for_user(
+        self, registration_id: uuid.UUID, user_id: uuid.UUID
+    ) -> RegistrationEntity: ...
+
 
 class ICheckInRepository(ABC):
     """Persistence contract for CheckIn records."""

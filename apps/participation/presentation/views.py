@@ -16,6 +16,10 @@ from apps.common.api.responses import created_response, error_response, success_
 from apps.common.health import check_database, check_rabbitmq, check_redis
 from apps.participation.application.use_cases.cancel import CancelRegistrationUseCase
 from apps.participation.application.use_cases.check_in import CheckInUseCase
+from apps.participation.application.use_cases.get_registration import GetRegistrationUseCase
+from apps.participation.application.use_cases.list_my_registrations import (
+    ListMyRegistrationsUseCase,
+)
 from apps.participation.application.use_cases.register import RegisterForEventUseCase
 from apps.participation.domain.entities import WaitlistEntryEntity
 from apps.participation.infrastructure.event_client import HttpEventClient
@@ -36,6 +40,8 @@ from apps.participation.presentation.serializers import (
 # ruff anchors so imports survive before the view classes are parsed
 _CANCEL_UC = CancelRegistrationUseCase
 _CHECKIN_UC = CheckInUseCase
+_GET_REG_UC = GetRegistrationUseCase
+_LIST_REGS_UC = ListMyRegistrationsUseCase
 _REGISTER_UC = RegisterForEventUseCase
 _WAITLIST_ENTITY = WaitlistEntryEntity
 _EVENT_CLIENT = HttpEventClient
@@ -275,3 +281,55 @@ class CheckInView(APIView):
             staff_user_id=uuid.UUID(str(request.user.id)),
         )
         return success_response(_CHECKIN_RESP_SER(result).data, request=request)
+
+
+class RegistrationListView(APIView):
+    """List all registrations belonging to the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Registrations"],
+        summary="List my registrations",
+        description="Returns all registrations for the authenticated user, newest first.",
+        responses={
+            200: OpenApiResponse(
+                description="User registrations.",
+                response=RegistrationResponseSerializer(many=True),
+            ),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+        },
+    )
+    def get(self, request: Request) -> Response:
+        """Return all registrations owned by the authenticated user."""
+        results = _LIST_REGS_UC(_REG_REPO()).execute(
+            user_id=uuid.UUID(str(request.user.id)),
+        )
+        return success_response(
+            _REG_RESP_SER(results, many=True).data, request=request
+        )
+
+
+class RegistrationDetailView(APIView):
+    """Retrieve a single registration owned by the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Registrations"],
+        summary="Get registration by id",
+        responses={
+            200: OpenApiResponse(
+                description="Registration found.", response=RegistrationResponseSerializer
+            ),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+            404: OpenApiResponse(description="Registration not found."),
+        },
+    )
+    def get(self, request: Request, registration_id: uuid.UUID) -> Response:
+        """Return the registration if it exists and belongs to the authenticated user."""
+        result = _GET_REG_UC(_REG_REPO()).execute(
+            registration_id=registration_id,
+            user_id=uuid.UUID(str(request.user.id)),
+        )
+        return success_response(_REG_RESP_SER(result).data, request=request)
