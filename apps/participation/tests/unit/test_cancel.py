@@ -96,18 +96,39 @@ def test_cancel_publishes_waitlist_promoted_event():
         waitlist_repo=FakeWaitlistRepository([entry]),
         publisher=publisher,
     ).execute(registration_id=reg.id, user_id=user_id)
-    assert len(publisher.events) == 1
-    assert publisher.events[0]["routing_key"] == "participation.waitlist.promoted"
-    assert publisher.events[0]["payload"]["user_id"] == str(waitlist_user)
-    assert publisher.events[0]["payload"]["event_id"] == str(event_id)
+    # two events: cancellation + waitlist.promoted
+    routing_keys = [e["routing_key"] for e in publisher.events]
+    assert "participation.registration.cancelled" in routing_keys
+    assert "participation.waitlist.promoted" in routing_keys
+    promoted = next(
+        e for e in publisher.events if e["routing_key"] == "participation.waitlist.promoted"
+    )
+    assert promoted["payload"]["user_id"] == str(waitlist_user)
+    assert promoted["payload"]["event_id"] == str(event_id)
 
 
-def test_cancel_no_waitlist_does_not_publish():
-    """No event published when there is no waitlist entry to promote."""
+def test_cancel_no_waitlist_only_publishes_cancelled():
+    """Without a waitlist entry, only the cancellation event is published."""
     user_id = uuid.uuid4()
     reg = make_registration(user_id=user_id, status="confirmed")
     publisher = FakeEventPublisher()
     _uc(regs=[reg], publisher=publisher).execute(
         registration_id=reg.id, user_id=user_id
     )
-    assert publisher.events == []
+    routing_keys = [e["routing_key"] for e in publisher.events]
+    assert routing_keys == ["participation.registration.cancelled"]
+
+
+def test_cancel_publishes_registration_cancelled_event():
+    """Cancellation always publishes participation.registration.cancelled."""
+    user_id = uuid.uuid4()
+    reg = make_registration(user_id=user_id, status="confirmed")
+    publisher = FakeEventPublisher()
+    _uc(regs=[reg], publisher=publisher).execute(
+        registration_id=reg.id, user_id=user_id
+    )
+    key = "participation.registration.cancelled"
+    cancelled_events = [e for e in publisher.events if e["routing_key"] == key]
+    assert len(cancelled_events) == 1
+    assert cancelled_events[0]["payload"]["registration_id"] == str(reg.id)
+    assert cancelled_events[0]["payload"]["user_id"] == str(user_id)

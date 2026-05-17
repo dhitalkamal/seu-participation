@@ -86,4 +86,15 @@ class CancelRegistrationUseCase:
                     },
                 )
 
+        if self._publisher is not None:
+            self._publisher.publish(
+                routing_key="participation.registration.cancelled",
+                payload={
+                    "user_id": str(user_id),
+                    "event_id": str(registration.event_id),
+                    "registration_id": str(registration_id),
+                    "registration_code": registration.registration_code,
+                },
+            )
+
         return registration
