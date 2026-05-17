@@ -114,3 +114,29 @@ class DjangoWaitlistRepository(IWaitlistRepository):
     def count_for_event(self, event_id: uuid.UUID) -> int:
         """Count all waitlist entries for this event (used for position calculation)."""
         return WaitlistEntry.objects.filter(event_id=event_id).count()
+
+
+class DjangoVolunteerShiftRepository:
+    """ORM-backed volunteer shift repository."""
+
+    def list_for_user(self, user_id: uuid.UUID) -> list:
+        """Return all shifts for a volunteer ordered by start time."""
+        from apps.participation.infrastructure.models import VolunteerShift
+        return [s.to_entity() for s in VolunteerShift.objects.filter(user_id=user_id).order_by("start_time")]
+
+
+class DjangoRegistrationStatsRepository:
+    """ORM-backed stats repository for the volunteer dashboard."""
+
+    def count_for_event(self, event_id: uuid.UUID) -> int:
+        """Total confirmed registrations for an event."""
+        return Registration.objects.filter(
+            event_id=event_id,
+            status__in=["confirmed", "checked_in"],
+        ).count()
+
+    def count_checked_in_for_event(self, event_id: uuid.UUID) -> int:
+        """How many attendees have been checked in for an event."""
+        return Registration.objects.filter(
+            event_id=event_id, status="checked_in"
+        ).count()

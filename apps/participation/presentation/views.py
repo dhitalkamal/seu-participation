@@ -328,3 +328,55 @@ class RegistrationDetailView(APIView):
             user_id=uuid.UUID(str(request.user.id)),
         )
         return success_response(_REG_RESP_SER(result).data, request=request)
+
+
+# ── Volunteer shift views ──────────────────────────────────────────────────────
+
+from apps.participation.application.use_cases.get_event_checkin_stats import GetEventCheckInStatsUseCase
+from apps.participation.application.use_cases.list_my_shifts import ListMyShiftsUseCase
+from apps.participation.infrastructure.repositories import (
+    DjangoRegistrationStatsRepository,
+    DjangoVolunteerShiftRepository,
+)
+from apps.participation.presentation.serializers import (
+    CheckInStatsResponseSerializer,
+    VolunteerShiftResponseSerializer,
+)
+
+
+class MyShiftsView(APIView):
+    """List all volunteer shifts assigned to the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Volunteer"],
+        summary="List my volunteer shifts",
+        responses={200: VolunteerShiftResponseSerializer(many=True)},
+    )
+    def get(self, request: Request) -> Response:
+        """Return all shifts for the current volunteer ordered by start time."""
+        shifts = ListMyShiftsUseCase(DjangoVolunteerShiftRepository()).execute(
+            user_id=uuid.UUID(str(request.user.id))
+        )
+        data = [VolunteerShiftResponseSerializer(s).data for s in shifts]
+        return success_response(data, request=request)
+
+
+class EventCheckInStatsView(APIView):
+    """Return live check-in stats for a specific event (volunteer dashboard)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Volunteer"],
+        summary="Event check-in stats",
+        responses={200: CheckInStatsResponseSerializer},
+    )
+    def get(self, request: Request, event_id: uuid.UUID) -> Response:
+        """Compute and return total, checked_in, and remaining counts for the event."""
+        stats = GetEventCheckInStatsUseCase(DjangoRegistrationStatsRepository()).execute(
+            event_id=event_id
+        )
+        payload = {"event_id": str(event_id), **stats}
+        return success_response(CheckInStatsResponseSerializer(payload).data, request=request)

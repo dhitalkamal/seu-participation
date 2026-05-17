@@ -48,6 +48,24 @@ class WaitlistEntryEntity:
     expires_at: datetime | None = None
 
 
+@dataclass(slots=True)
+class VolunteerShiftEntity:
+    """A volunteer's assigned shift for a specific event."""
+
+    id: uuid.UUID
+    event_id: uuid.UUID
+    user_id: uuid.UUID
+    role: str
+    start_time: datetime
+    end_time: datetime
+    location: str
+    coordinator_name: str
+    coordinator_phone: str
+    status: str
+    notes: str | None
+    created_at: datetime
+
+
 @dataclass(frozen=True)
 class EventSummary:
     """Read-only snapshot of an event fetched from the event-service."""

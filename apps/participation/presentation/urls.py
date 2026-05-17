@@ -7,7 +7,9 @@ from django.urls import URLPattern, path
 from .views import (
     CancelRegistrationView,
     CheckInView,
+    EventCheckInStatsView,
     HealthCheckView,
+    MyShiftsView,
     RegisterView,
     RegistrationDetailView,
 )
@@ -22,4 +24,10 @@ urlpatterns: list[URLPattern] = [
     ),
     path("registrations/cancel/", CancelRegistrationView.as_view(), name="cancel-registration"),
     path("check-in/", CheckInView.as_view(), name="check-in"),
+    path("volunteer/shifts/", MyShiftsView.as_view(), name="volunteer-shifts"),
+    path(
+        "volunteer/events/<uuid:event_id>/stats/",
+        EventCheckInStatsView.as_view(),
+        name="volunteer-event-stats",
+    ),
 ]

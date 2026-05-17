@@ -64,3 +64,29 @@ class CheckInResponseSerializer(serializers.Serializer):
     registration_id = serializers.UUIDField()
     event_id = serializers.UUIDField()
     checked_in_at = serializers.DateTimeField()
+
+
+class VolunteerShiftResponseSerializer(serializers.Serializer):
+    """Public shape of a volunteer shift resource."""
+
+    id = serializers.UUIDField()
+    event_id = serializers.UUIDField()
+    user_id = serializers.UUIDField()
+    role = serializers.CharField()
+    start_time = serializers.DateTimeField()
+    end_time = serializers.DateTimeField()
+    location = serializers.CharField()
+    coordinator_name = serializers.CharField()
+    coordinator_phone = serializers.CharField()
+    status = serializers.CharField()
+    notes = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
+
+
+class CheckInStatsResponseSerializer(serializers.Serializer):
+    """Check-in progress stats for the volunteer event dashboard."""
+
+    event_id = serializers.UUIDField()
+    total = serializers.IntegerField()
+    checked_in = serializers.IntegerField()
+    remaining = serializers.IntegerField()

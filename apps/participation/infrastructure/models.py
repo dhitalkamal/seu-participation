@@ -9,6 +9,7 @@ from django.db import models
 from apps.participation.domain.entities import (
     CheckInEntity,
     RegistrationEntity,
+    VolunteerShiftEntity,
     WaitlistEntryEntity,
 )
 
@@ -159,4 +160,54 @@ class WaitlistEntry(models.Model):
             user_id=entity.user_id,
             position=entity.position,
             expires_at=entity.expires_at,
+        )
+
+
+class VolunteerShift(models.Model):
+    """A volunteer's assigned shift for a specific event."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CONFIRMED = "confirmed", "Confirmed"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    class Meta:
+        db_table = '"participation"."volunteer_shift"'
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event_id", "user_id"],
+                condition=~models.Q(status="cancelled"),
+                name="unique_active_volunteer_shift",
+            )
+        ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_id = models.UUIDField(db_index=True)
+    user_id = models.UUIDField(db_index=True)
+    role = models.CharField(max_length=100)
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+    location = models.CharField(max_length=200)
+    coordinator_name = models.CharField(max_length=100)
+    coordinator_phone = models.CharField(max_length=30)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.CONFIRMED)
+    notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def to_entity(self) -> VolunteerShiftEntity:
+        """Map this ORM row to a pure-Python VolunteerShiftEntity."""
+        return VolunteerShiftEntity(
+            id=self.id,
+            event_id=self.event_id,
+            user_id=self.user_id,
+            role=self.role,
+            start_time=self.start_time,
+            end_time=self.end_time,
+            location=self.location,
+            coordinator_name=self.coordinator_name,
+            coordinator_phone=self.coordinator_phone,
+            status=self.status,
+            notes=self.notes,
+            created_at=self.created_at,
         )
