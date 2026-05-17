@@ -11,6 +11,7 @@ from apps.participation.domain.entities import RegistrationEntity, WaitlistEntry
 from apps.participation.domain.exceptions import AlreadyRegisteredError
 from apps.participation.domain.repositories import (
     IEventClient,
+    IEventPublisher,
     IRegistrationRepository,
     IWaitlistRepository,
 )
@@ -29,10 +30,12 @@ class RegisterForEventUseCase:
         reg_repo: IRegistrationRepository,
         waitlist_repo: IWaitlistRepository,
         event_client: IEventClient,
+        publisher: IEventPublisher | None = None,
     ) -> None:
         self._regs = reg_repo
         self._waitlist = waitlist_repo
         self._events = event_client
+        self._publisher = publisher
 
     def execute(
         self,
@@ -81,4 +84,15 @@ class RegisterForEventUseCase:
             updated_at=now,
             notes=notes,
         )
-        return self._regs.create(registration)
+        created = self._regs.create(registration)
+        if self._publisher is not None:
+            self._publisher.publish(
+                routing_key="participation.registration.created",
+                payload={
+                    "user_id": str(user_id),
+                    "event_id": str(event_id),
+                    "registration_id": str(created.id),
+                    "registration_code": created.registration_code,
+                },
+            )
+        return created

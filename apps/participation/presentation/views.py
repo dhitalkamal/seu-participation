@@ -225,6 +225,7 @@ class RegisterView(APIView):
             reg_repo=_REG_REPO(),
             waitlist_repo=_WAITLIST_REPO(),
             event_client=_EVENT_CLIENT(settings.EVENT_SERVICE_URL),
+            publisher=_PUBLISHER(),
         ).execute(
             event_id=d["event_id"],
             user_id=uuid.UUID(str(request.user.id)),

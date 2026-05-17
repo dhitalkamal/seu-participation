@@ -11,6 +11,7 @@ from apps.participation.domain.entities import RegistrationEntity, WaitlistEntry
 from apps.participation.domain.exceptions import AlreadyRegisteredError, EventNotFoundError
 from apps.participation.tests.unit.fakes import (
     FakeEventClient,
+    FakeEventPublisher,
     FakeRegistrationRepository,
     FakeWaitlistRepository,
     make_event_summary,
@@ -18,11 +19,12 @@ from apps.participation.tests.unit.fakes import (
 )
 
 
-def _uc(event=None, regs=None, waitlist=None) -> RegisterForEventUseCase:
+def _uc(event=None, regs=None, waitlist=None, publisher=None) -> RegisterForEventUseCase:
     return RegisterForEventUseCase(
         reg_repo=FakeRegistrationRepository(regs or []),
         waitlist_repo=FakeWaitlistRepository(waitlist or []),
         event_client=FakeEventClient(event),
+        publisher=publisher or FakeEventPublisher(),
     )
 
 
@@ -71,6 +73,36 @@ def test_register_stores_notes():
     )
     assert isinstance(result, RegistrationEntity)
     assert result.notes == "Front row please"
+
+
+def test_register_publishes_registration_created_event():
+    """Successful registration publishes participation.registration.created."""
+    event = make_event_summary(capacity=100, registered_count=0)
+    publisher = FakeEventPublisher()
+    result = RegisterForEventUseCase(
+        reg_repo=FakeRegistrationRepository(),
+        waitlist_repo=FakeWaitlistRepository(),
+        event_client=FakeEventClient(event),
+        publisher=publisher,
+    ).execute(event_id=event.event_id, user_id=uuid.uuid4())
+    assert isinstance(result, RegistrationEntity)
+    assert len(publisher.events) == 1
+    assert publisher.events[0]["routing_key"] == "participation.registration.created"
+    assert publisher.events[0]["payload"]["registration_code"] == result.registration_code
+
+
+def test_register_waitlist_does_not_publish_registration_created():
+    """Adding to waitlist does NOT publish registration.created."""
+    event = make_event_summary(capacity=10, registered_count=10)
+    publisher = FakeEventPublisher()
+    result = RegisterForEventUseCase(
+        reg_repo=FakeRegistrationRepository(),
+        waitlist_repo=FakeWaitlistRepository(),
+        event_client=FakeEventClient(event),
+        publisher=publisher,
+    ).execute(event_id=event.event_id, user_id=uuid.uuid4())
+    assert isinstance(result, WaitlistEntryEntity)
+    assert publisher.events == []
 
 
 def test_register_at_capacity_adds_to_waitlist():
