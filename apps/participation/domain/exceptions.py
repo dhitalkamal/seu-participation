@@ -1,2 +1,40 @@
 """Domain errors raised by participation use cases and never swallowed silently."""
+
 from __future__ import annotations
+
+from apps.common.api.exceptions import DomainError
+
+
+class RegistrationNotFoundError(DomainError):
+    """No registration matches the given identifier."""
+
+    http_status = 404
+    code = "ERR_REGISTRATION_NOT_FOUND"
+
+
+class AlreadyRegisteredError(DomainError):
+    """The user already has an active registration for this event."""
+
+    http_status = 409
+    code = "ERR_REGISTRATION_ALREADY_EXISTS"
+
+
+class EventAtCapacityError(DomainError):
+    """The event has no remaining spots."""
+
+    http_status = 409
+    code = "ERR_EVENT_AT_CAPACITY"
+
+
+class InvalidRegistrationStatusError(DomainError):
+    """The requested operation is not allowed for the current registration status."""
+
+    http_status = 422
+    code = "ERR_REGISTRATION_INVALID_STATUS"
+
+
+class EventNotFoundError(DomainError):
+    """The event does not exist or the event-service is unreachable."""
+
+    http_status = 404
+    code = "ERR_EVENT_NOT_FOUND"
