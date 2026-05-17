@@ -202,6 +202,7 @@ class RegisterView(APIView):
             event_id=d["event_id"],
             user_id=uuid.UUID(str(request.user.id)),
             quantity=d["quantity"],
+            notes=d.get("notes"),
         )
 
         if isinstance(result, _WAITLIST_ENTITY):

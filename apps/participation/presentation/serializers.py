@@ -10,6 +10,7 @@ class RegisterSerializer(serializers.Serializer):
 
     event_id = serializers.UUIDField()
     quantity = serializers.IntegerField(min_value=1, default=1)
+    notes = serializers.CharField(max_length=500, required=False, allow_null=True)
 
 
 class CancelSerializer(serializers.Serializer):
@@ -34,6 +35,7 @@ class RegistrationResponseSerializer(serializers.Serializer):
     status = serializers.CharField()
     registration_code = serializers.CharField()
     quantity = serializers.IntegerField()
+    notes = serializers.CharField(allow_null=True)
     checked_in_at = serializers.DateTimeField(allow_null=True)
     cancelled_at = serializers.DateTimeField(allow_null=True)
     created_at = serializers.DateTimeField()

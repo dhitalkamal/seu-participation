@@ -40,6 +40,7 @@ class RegisterForEventUseCase:
         event_id: uuid.UUID,
         user_id: uuid.UUID,
         quantity: int = 1,
+        notes: str | None = None,
     ) -> RegistrationEntity | WaitlistEntryEntity:
         """
         Check event capacity and either create a confirmed registration or a waitlist entry.
@@ -78,5 +79,6 @@ class RegisterForEventUseCase:
             quantity=quantity,
             created_at=now,
             updated_at=now,
+            notes=notes,
         )
         return self._regs.create(registration)

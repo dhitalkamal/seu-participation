@@ -21,6 +21,7 @@ class RegistrationEntity:
     updated_at: datetime
     checked_in_at: datetime | None = None
     cancelled_at: datetime | None = None
+    notes: str | None = None
 
 
 @dataclass(slots=True)

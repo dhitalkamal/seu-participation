@@ -40,6 +40,7 @@ class Registration(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.CONFIRMED)
     registration_code = models.CharField(max_length=20, unique=True)
     quantity = models.PositiveIntegerField(default=1)
+    notes = models.TextField(null=True, blank=True)
     checked_in_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -58,6 +59,7 @@ class Registration(models.Model):
             updated_at=self.updated_at,
             checked_in_at=self.checked_in_at,
             cancelled_at=self.cancelled_at,
+            notes=self.notes,
         )
 
     @classmethod
@@ -72,6 +74,7 @@ class Registration(models.Model):
             quantity=entity.quantity,
             checked_in_at=entity.checked_in_at,
             cancelled_at=entity.cancelled_at,
+            notes=entity.notes,
         )
 
 

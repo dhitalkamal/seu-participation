@@ -63,6 +63,16 @@ def test_register_event_not_found_raises():
         _uc(event=None).execute(event_id=uuid.uuid4(), user_id=uuid.uuid4())
 
 
+def test_register_stores_notes():
+    """Notes field is persisted when provided."""
+    event = make_event_summary(capacity=100, registered_count=0)
+    result = _uc(event=event).execute(
+        event_id=event.event_id, user_id=uuid.uuid4(), quantity=1, notes="Front row please"
+    )
+    assert isinstance(result, RegistrationEntity)
+    assert result.notes == "Front row please"
+
+
 def test_register_at_capacity_adds_to_waitlist():
     """When the event is full, the user is added to the waitlist instead."""
     event_id = uuid.uuid4()
