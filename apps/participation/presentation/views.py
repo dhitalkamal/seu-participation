@@ -175,9 +175,28 @@ class HealthCheckView(APIView):
 
 
 class RegisterView(APIView):
-    """Register for an event or join the waitlist if at capacity."""
+    """List own registrations (GET) or register for an event (POST)."""
 
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Registrations"],
+        summary="List my registrations",
+        description="Returns all registrations for the authenticated user, newest first.",
+        responses={
+            200: OpenApiResponse(
+                description="User registrations.",
+                response=RegistrationResponseSerializer(many=True),
+            ),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+        },
+    )
+    def get(self, request: Request) -> Response:
+        """Return all registrations owned by the authenticated user."""
+        results = _LIST_REGS_UC(_REG_REPO()).execute(
+            user_id=uuid.UUID(str(request.user.id)),
+        )
+        return success_response(_REG_RESP_SER(results, many=True).data, request=request)
 
     @extend_schema(
         tags=["Registrations"],
@@ -284,33 +303,6 @@ class CheckInView(APIView):
             staff_user_id=uuid.UUID(str(request.user.id)),
         )
         return success_response(_CHECKIN_RESP_SER(result).data, request=request)
-
-
-class RegistrationListView(APIView):
-    """List all registrations belonging to the authenticated user."""
-
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        tags=["Registrations"],
-        summary="List my registrations",
-        description="Returns all registrations for the authenticated user, newest first.",
-        responses={
-            200: OpenApiResponse(
-                description="User registrations.",
-                response=RegistrationResponseSerializer(many=True),
-            ),
-            401: OpenApiResponse(description="Missing or invalid JWT."),
-        },
-    )
-    def get(self, request: Request) -> Response:
-        """Return all registrations owned by the authenticated user."""
-        results = _LIST_REGS_UC(_REG_REPO()).execute(
-            user_id=uuid.UUID(str(request.user.id)),
-        )
-        return success_response(
-            _REG_RESP_SER(results, many=True).data, request=request
-        )
 
 
 class RegistrationDetailView(APIView):
