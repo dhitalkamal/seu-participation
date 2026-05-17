@@ -74,3 +74,10 @@ class IEventClient(ABC):
 
     @abstractmethod
     def get_event(self, event_id: uuid.UUID) -> EventSummary: ...
+
+
+class IEventPublisher(ABC):
+    """Port for publishing domain events to the message broker."""
+
+    @abstractmethod
+    def publish(self, *, routing_key: str, payload: dict) -> None: ...

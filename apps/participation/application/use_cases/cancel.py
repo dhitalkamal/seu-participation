@@ -11,7 +11,11 @@ from apps.participation.domain.exceptions import (
     InvalidRegistrationStatusError,
     RegistrationNotFoundError,
 )
-from apps.participation.domain.repositories import IRegistrationRepository, IWaitlistRepository
+from apps.participation.domain.repositories import (
+    IEventPublisher,
+    IRegistrationRepository,
+    IWaitlistRepository,
+)
 
 # ! exactly these statuses are cancellable, no others
 _CANCELLABLE: frozenset[str] = frozenset({"pending", "confirmed", "waitlisted"})
@@ -24,9 +28,11 @@ class CancelRegistrationUseCase:
         self,
         reg_repo: IRegistrationRepository,
         waitlist_repo: IWaitlistRepository,
+        publisher: IEventPublisher | None = None,
     ) -> None:
         self._regs = reg_repo
         self._waitlist = waitlist_repo
+        self._publisher = publisher
 
     def execute(self, *, registration_id: uuid.UUID, user_id: uuid.UUID) -> RegistrationEntity:
         """
@@ -69,5 +75,15 @@ class CancelRegistrationUseCase:
                 updated_at=now,
             )
             self._regs.create(promoted)
+            if self._publisher is not None:
+                self._publisher.publish(
+                    routing_key="participation.waitlist.promoted",
+                    payload={
+                        "user_id": str(next_entry.user_id),
+                        "event_id": str(registration.event_id),
+                        "registration_id": str(promoted.id),
+                        "registration_code": promoted.registration_code,
+                    },
+                )
 
         return registration

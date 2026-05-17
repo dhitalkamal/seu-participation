@@ -16,6 +16,7 @@ from apps.participation.domain.exceptions import EventNotFoundError, Registratio
 from apps.participation.domain.repositories import (
     ICheckInRepository,
     IEventClient,
+    IEventPublisher,
     IRegistrationRepository,
     IWaitlistRepository,
 )
@@ -165,3 +166,14 @@ class FakeEventClient(IEventClient):
         if self._event is None:
             raise EventNotFoundError("Event not found.")
         return self._event
+
+
+class FakeEventPublisher(IEventPublisher):
+    """Records published events for assertion in tests."""
+
+    def __init__(self) -> None:
+        self.events: list[dict] = []
+
+    def publish(self, *, routing_key: str, payload: dict) -> None:
+        """Record the published event."""
+        self.events.append({"routing_key": routing_key, "payload": payload})

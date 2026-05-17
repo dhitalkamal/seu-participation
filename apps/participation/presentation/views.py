@@ -23,6 +23,7 @@ from apps.participation.application.use_cases.list_my_registrations import (
 from apps.participation.application.use_cases.register import RegisterForEventUseCase
 from apps.participation.domain.entities import WaitlistEntryEntity
 from apps.participation.infrastructure.event_client import HttpEventClient
+from apps.participation.infrastructure.publisher import RabbitMQEventPublisher
 from apps.participation.infrastructure.repositories import (
     DjangoCheckInRepository,
     DjangoRegistrationRepository,
@@ -39,6 +40,7 @@ from apps.participation.presentation.serializers import (
 
 # ruff anchors so imports survive before the view classes are parsed
 _CANCEL_UC = CancelRegistrationUseCase
+_PUBLISHER = RabbitMQEventPublisher
 _CHECKIN_UC = CheckInUseCase
 _GET_REG_UC = GetRegistrationUseCase
 _LIST_REGS_UC = ListMyRegistrationsUseCase
@@ -243,6 +245,7 @@ class CancelRegistrationView(APIView):
         result = _CANCEL_UC(
             reg_repo=_REG_REPO(),
             waitlist_repo=_WAITLIST_REPO(),
+            publisher=_PUBLISHER(),
         ).execute(
             registration_id=d["registration_id"],
             user_id=uuid.UUID(str(request.user.id)),
