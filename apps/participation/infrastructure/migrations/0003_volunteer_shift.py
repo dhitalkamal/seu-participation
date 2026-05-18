@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 
-import django.db.models.deletion
 from django.db import migrations, models
 
 
@@ -26,16 +25,19 @@ class Migration(migrations.Migration):
                 ("location", models.CharField(max_length=200)),
                 ("coordinator_name", models.CharField(max_length=100)),
                 ("coordinator_phone", models.CharField(max_length=30)),
-                ("status", models.CharField(
-                    choices=[
-                        ("pending", "Pending"),
-                        ("confirmed", "Confirmed"),
-                        ("completed", "Completed"),
-                        ("cancelled", "Cancelled"),
-                    ],
-                    default="confirmed",
-                    max_length=20,
-                )),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("confirmed", "Confirmed"),
+                            ("completed", "Completed"),
+                            ("cancelled", "Cancelled"),
+                        ],
+                        default="confirmed",
+                        max_length=20,
+                    ),
+                ),
                 ("notes", models.TextField(blank=True, null=True)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],

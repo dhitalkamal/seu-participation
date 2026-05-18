@@ -38,3 +38,10 @@ class EventNotFoundError(DomainError):
 
     http_status = 404
     code = "ERR_EVENT_NOT_FOUND"
+
+
+class InvalidQRTokenError(DomainError):
+    """QR token is expired, tampered, or has the wrong event_id."""
+
+    http_status = 422
+    code = "ERR_QR_TOKEN_INVALID"

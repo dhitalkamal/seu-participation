@@ -112,9 +112,7 @@ def test_cancel_no_waitlist_only_publishes_cancelled():
     user_id = uuid.uuid4()
     reg = make_registration(user_id=user_id, status="confirmed")
     publisher = FakeEventPublisher()
-    _uc(regs=[reg], publisher=publisher).execute(
-        registration_id=reg.id, user_id=user_id
-    )
+    _uc(regs=[reg], publisher=publisher).execute(registration_id=reg.id, user_id=user_id)
     routing_keys = [e["routing_key"] for e in publisher.events]
     assert routing_keys == ["participation.registration.cancelled"]
 
@@ -124,9 +122,7 @@ def test_cancel_publishes_registration_cancelled_event():
     user_id = uuid.uuid4()
     reg = make_registration(user_id=user_id, status="confirmed")
     publisher = FakeEventPublisher()
-    _uc(regs=[reg], publisher=publisher).execute(
-        registration_id=reg.id, user_id=user_id
-    )
+    _uc(regs=[reg], publisher=publisher).execute(registration_id=reg.id, user_id=user_id)
     key = "participation.registration.cancelled"
     cancelled_events = [e for e in publisher.events if e["routing_key"] == key]
     assert len(cancelled_events) == 1

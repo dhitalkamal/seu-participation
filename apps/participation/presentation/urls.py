@@ -5,11 +5,14 @@ from __future__ import annotations
 from django.urls import URLPattern, path
 
 from .views import (
+    BatchCheckInView,
     CancelRegistrationView,
     CheckInView,
     EventCheckInStatsView,
     HealthCheckView,
     MyShiftsView,
+    PassportView,
+    QRTokenView,
     RegisterView,
     RegistrationDetailView,
 )
@@ -22,12 +25,19 @@ urlpatterns: list[URLPattern] = [
         RegistrationDetailView.as_view(),
         name="registration-detail",
     ),
+    path(
+        "registrations/<uuid:registration_id>/qr-token/",
+        QRTokenView.as_view(),
+        name="registration-qr-token",
+    ),
     path("registrations/cancel/", CancelRegistrationView.as_view(), name="cancel-registration"),
     path("check-in/", CheckInView.as_view(), name="check-in"),
+    path("check-in/batch/", BatchCheckInView.as_view(), name="check-in-batch"),
     path("volunteer/shifts/", MyShiftsView.as_view(), name="volunteer-shifts"),
     path(
         "volunteer/events/<uuid:event_id>/stats/",
         EventCheckInStatsView.as_view(),
         name="volunteer-event-stats",
     ),
+    path("passport/me/", PassportView.as_view(), name="passport-me"),
 ]

@@ -35,9 +35,7 @@ def test_get_returns_own_registration():
     """Returns the registration when it belongs to the user."""
     reg = make_registration()
     repo = FakeRegistrationRepository([reg])
-    result = GetRegistrationUseCase(repo).execute(
-        registration_id=reg.id, user_id=reg.user_id
-    )
+    result = GetRegistrationUseCase(repo).execute(registration_id=reg.id, user_id=reg.user_id)
     assert result.id == reg.id
 
 
@@ -46,15 +44,11 @@ def test_get_wrong_user_raises():
     reg = make_registration()
     repo = FakeRegistrationRepository([reg])
     with pytest.raises(RegistrationNotFoundError):
-        GetRegistrationUseCase(repo).execute(
-            registration_id=reg.id, user_id=uuid.uuid4()
-        )
+        GetRegistrationUseCase(repo).execute(registration_id=reg.id, user_id=uuid.uuid4())
 
 
 def test_get_missing_raises():
     """Raises RegistrationNotFoundError when the registration does not exist."""
     repo = FakeRegistrationRepository()
     with pytest.raises(RegistrationNotFoundError):
-        GetRegistrationUseCase(repo).execute(
-            registration_id=uuid.uuid4(), user_id=uuid.uuid4()
-        )
+        GetRegistrationUseCase(repo).execute(registration_id=uuid.uuid4(), user_id=uuid.uuid4())
