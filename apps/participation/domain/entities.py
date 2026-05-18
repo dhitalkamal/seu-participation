@@ -66,6 +66,92 @@ class VolunteerShiftEntity:
     created_at: datetime
 
 
+@dataclass(slots=True)
+class QREncryptionKeyEntity:
+    """AES-256 encryption key for a specific event, rotated every 24 hours."""
+
+    id: uuid.UUID
+    event_id: uuid.UUID
+    key_hex: str
+    valid_from: datetime
+    expires_at: datetime
+    is_active: bool
+
+
+@dataclass(slots=True)
+class PassportEntryEntity:
+    """A single attendance or volunteer record in a user's Verified Event Passport."""
+
+    event_id: uuid.UUID
+    event_name: str
+    role: str
+    status: str
+    attended_at: datetime
+    certificate_issued: bool
+    certificate_url: str | None = None
+    volunteer_hours: float | None = None
+
+
+@dataclass(slots=True)
+class PassportEntity:
+    """A user's portable Verified Event Passport - signed aggregate of participation history."""
+
+    user_id: uuid.UUID
+    entries: list
+    generated_at: datetime
+    signature: str
+
+
+@dataclass(slots=True)
+class TicketTierEntity:
+    """A named tier within an event (e.g. General, VIP, Early Bird, Comp)."""
+
+    id: uuid.UUID
+    event_id: uuid.UUID
+    name: str
+    tier_type: str
+    price: str
+    capacity: int
+    sold_count: int
+    description: str
+    created_at: datetime
+    is_active: bool = True
+
+    @property
+    def is_at_capacity(self) -> bool:
+        """True when no spots remain in this tier."""
+        return self.sold_count >= self.capacity
+
+    @property
+    def available_spots(self) -> int:
+        """How many seats are still available in this tier."""
+        return self.capacity - self.sold_count
+
+
+@dataclass(slots=True)
+class CustomFormFieldEntity:
+    """A custom question added to an event registration form."""
+
+    id: uuid.UUID
+    event_id: uuid.UUID
+    label: str
+    field_type: str
+    is_required: bool
+    options: list
+    position: int
+    created_at: datetime
+
+
+@dataclass(slots=True)
+class RegistrationAnswerEntity:
+    """An attendee's answer to a custom form question."""
+
+    id: uuid.UUID
+    registration_id: uuid.UUID
+    field_id: uuid.UUID
+    value: str
+
+
 @dataclass(frozen=True)
 class EventSummary:
     """Read-only snapshot of an event fetched from the event-service."""

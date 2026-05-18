@@ -64,12 +64,14 @@ class RegisterForEventUseCase:
 
         if event.is_at_capacity:
             position = self._waitlist.count_for_event(event_id) + 1
+            # 24-hour acceptance window as per PRD
             entry = WaitlistEntryEntity(
                 id=uuid.uuid4(),
                 event_id=event_id,
                 user_id=user_id,
                 position=position,
                 created_at=now,
+                expires_at=None,
             )
             return self._waitlist.add(entry)
 

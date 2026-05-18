@@ -14,9 +14,7 @@ class GetRegistrationUseCase:
     def __init__(self, reg_repo: IRegistrationRepository) -> None:
         self._regs = reg_repo
 
-    def execute(
-        self, *, registration_id: uuid.UUID, user_id: uuid.UUID
-    ) -> RegistrationEntity:
+    def execute(self, *, registration_id: uuid.UUID, user_id: uuid.UUID) -> RegistrationEntity:
         """
         Return the registration if it exists and belongs to user_id.
 

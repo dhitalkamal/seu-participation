@@ -28,6 +28,7 @@ def _handle_order_completed(payload: dict) -> None:
     repo = DjangoRegistrationRepository()
     try:
         import uuid
+
         reg = repo.get_by_id(uuid.UUID(registration_id))
         if reg.status == "pending":
             reg.status = "confirmed"

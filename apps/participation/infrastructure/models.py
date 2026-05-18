@@ -1,4 +1,4 @@
-"""Django ORM models for the participation domain. Maps domain entities to the participation schema."""
+"""Django ORM models for the participation domain."""
 
 from __future__ import annotations
 
@@ -211,3 +211,86 @@ class VolunteerShift(models.Model):
             notes=self.notes,
             created_at=self.created_at,
         )
+
+
+class TicketTier(models.Model):
+    """A named pricing tier for an event (General, VIP, Early Bird, Comp)."""
+
+    class TierType(models.TextChoices):
+        GENERAL = "general", "General"
+        VIP = "vip", "VIP"
+        EARLY_BIRD = "early_bird", "Early Bird"
+        COMP = "comp", "Complimentary"
+
+    class Meta:
+        db_table = '"participation"."ticket_tier"'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_id = models.UUIDField(db_index=True)
+    name = models.CharField(max_length=100)
+    tier_type = models.CharField(max_length=20, choices=TierType.choices, default=TierType.GENERAL)
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    capacity = models.PositiveIntegerField()
+    sold_count = models.PositiveIntegerField(default=0)
+    description = models.CharField(max_length=500, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def to_entity(self) -> object:
+        """Map to domain entity."""
+        from apps.participation.domain.entities import TicketTierEntity  # noqa: PLC0415
+
+        return TicketTierEntity(
+            id=self.id,
+            event_id=self.event_id,
+            name=self.name,
+            tier_type=self.tier_type,
+            price=str(self.price),
+            capacity=self.capacity,
+            sold_count=self.sold_count,
+            description=self.description,
+            is_active=self.is_active,
+            created_at=self.created_at,
+        )
+
+
+class CustomFormField(models.Model):
+    """A custom question on an event registration form (up to 20 per event)."""
+
+    class FieldType(models.TextChoices):
+        TEXT = "text", "Short text"
+        TEXTAREA = "textarea", "Long text"
+        SELECT = "select", "Dropdown"
+        CHECKBOX = "checkbox", "Checkbox"
+        RADIO = "radio", "Radio buttons"
+
+    class Meta:
+        db_table = '"participation"."custom_form_field"'
+        ordering = ["position"]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_id = models.UUIDField(db_index=True)
+    label = models.CharField(max_length=255)
+    field_type = models.CharField(max_length=20, choices=FieldType.choices, default=FieldType.TEXT)
+    is_required = models.BooleanField(default=False)
+    options = models.JSONField(default=list, blank=True)
+    position = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class RegistrationAnswer(models.Model):
+    """An attendee answer to a custom form field."""
+
+    class Meta:
+        db_table = '"participation"."registration_answer"'
+        constraints = [
+            models.UniqueConstraint(
+                fields=["registration", "field"],
+                name="unique_registration_answer",
+            )
+        ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    registration = models.ForeignKey(Registration, on_delete=models.CASCADE, related_name="answers")
+    field = models.ForeignKey(CustomFormField, on_delete=models.CASCADE, related_name="answers")
+    value = models.TextField()

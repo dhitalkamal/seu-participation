@@ -5,10 +5,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-import pytest
-
+from apps.participation.application.use_cases.get_event_checkin_stats import (
+    GetEventCheckInStatsUseCase,
+)
 from apps.participation.application.use_cases.list_my_shifts import ListMyShiftsUseCase
-from apps.participation.application.use_cases.get_event_checkin_stats import GetEventCheckInStatsUseCase
 from apps.participation.domain.entities import VolunteerShiftEntity
 
 

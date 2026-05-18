@@ -68,7 +68,7 @@ class DjangoRegistrationRepository(IRegistrationRepository):
     def get_by_id_for_user(
         self, registration_id: uuid.UUID, user_id: uuid.UUID
     ) -> RegistrationEntity:
-        """Fetch by id, enforcing ownership. Raises RegistrationNotFoundError if absent or not owned."""
+        """Fetch by id enforcing ownership. Raises RegistrationNotFoundError if absent."""
         try:
             return Registration.objects.get(id=registration_id, user_id=user_id).to_entity()
         except Registration.DoesNotExist:
@@ -122,7 +122,11 @@ class DjangoVolunteerShiftRepository:
     def list_for_user(self, user_id: uuid.UUID) -> list:
         """Return all shifts for a volunteer ordered by start time."""
         from apps.participation.infrastructure.models import VolunteerShift
-        return [s.to_entity() for s in VolunteerShift.objects.filter(user_id=user_id).order_by("start_time")]
+
+        return [
+            s.to_entity()
+            for s in VolunteerShift.objects.filter(user_id=user_id).order_by("start_time")
+        ]
 
 
 class DjangoRegistrationStatsRepository:
@@ -137,6 +141,4 @@ class DjangoRegistrationStatsRepository:
 
     def count_checked_in_for_event(self, event_id: uuid.UUID) -> int:
         """How many attendees have been checked in for an event."""
-        return Registration.objects.filter(
-            event_id=event_id, status="checked_in"
-        ).count()
+        return Registration.objects.filter(event_id=event_id, status="checked_in").count()

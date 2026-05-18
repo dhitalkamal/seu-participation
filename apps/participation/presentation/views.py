@@ -14,27 +14,42 @@ from rest_framework.views import APIView
 
 from apps.common.api.responses import created_response, error_response, success_response
 from apps.common.health import check_database, check_rabbitmq, check_redis
+from apps.participation.application.use_cases.batch_checkin import BatchCheckInUseCase
 from apps.participation.application.use_cases.cancel import CancelRegistrationUseCase
 from apps.participation.application.use_cases.check_in import CheckInUseCase
+from apps.participation.application.use_cases.generate_qr_token import GenerateQRTokenUseCase
+from apps.participation.application.use_cases.get_event_checkin_stats import (
+    GetEventCheckInStatsUseCase,
+)
+from apps.participation.application.use_cases.get_passport import GetPassportUseCase
 from apps.participation.application.use_cases.get_registration import GetRegistrationUseCase
 from apps.participation.application.use_cases.list_my_registrations import (
     ListMyRegistrationsUseCase,
 )
+from apps.participation.application.use_cases.list_my_shifts import ListMyShiftsUseCase
 from apps.participation.application.use_cases.register import RegisterForEventUseCase
+from apps.participation.application.use_cases.validate_qr_token import ValidateQRTokenUseCase
+from apps.participation.application.use_cases.verify_passport import VerifyPassportUseCase
 from apps.participation.domain.entities import WaitlistEntryEntity
+from apps.participation.domain.exceptions import InvalidQRTokenError
 from apps.participation.infrastructure.event_client import HttpEventClient
+from apps.participation.infrastructure.models import CustomFormField, TicketTier
 from apps.participation.infrastructure.publisher import RabbitMQEventPublisher
 from apps.participation.infrastructure.repositories import (
     DjangoCheckInRepository,
     DjangoRegistrationRepository,
+    DjangoRegistrationStatsRepository,
+    DjangoVolunteerShiftRepository,
     DjangoWaitlistRepository,
 )
 from apps.participation.presentation.serializers import (
     CancelSerializer,
     CheckInResponseSerializer,
     CheckInSerializer,
+    CheckInStatsResponseSerializer,
     RegisterSerializer,
     RegistrationResponseSerializer,
+    VolunteerShiftResponseSerializer,
     WaitlistResponseSerializer,
 )
 
@@ -57,6 +72,12 @@ _REG_SER = RegisterSerializer
 _REG_RESP_SER = RegistrationResponseSerializer
 _WAITLIST_RESP_SER = WaitlistResponseSerializer
 _IS_AUTH = IsAuthenticated
+_GEN_QR_UC = GenerateQRTokenUseCase
+_VALIDATE_QR_UC = ValidateQRTokenUseCase
+_BATCH_CHECKIN_UC = BatchCheckInUseCase
+_GET_PASSPORT_UC = GetPassportUseCase
+_VERIFY_PASSPORT_UC = VerifyPassportUseCase
+_INVALID_QR_ERROR = InvalidQRTokenError
 _CREATED = created_response
 _UUID = uuid.UUID
 
@@ -331,18 +352,7 @@ class RegistrationDetailView(APIView):
         return success_response(_REG_RESP_SER(result).data, request=request)
 
 
-# ── Volunteer shift views ──────────────────────────────────────────────────────
-
-from apps.participation.application.use_cases.get_event_checkin_stats import GetEventCheckInStatsUseCase
-from apps.participation.application.use_cases.list_my_shifts import ListMyShiftsUseCase
-from apps.participation.infrastructure.repositories import (
-    DjangoRegistrationStatsRepository,
-    DjangoVolunteerShiftRepository,
-)
-from apps.participation.presentation.serializers import (
-    CheckInStatsResponseSerializer,
-    VolunteerShiftResponseSerializer,
-)
+# * Volunteer shift views
 
 
 class MyShiftsView(APIView):
@@ -381,3 +391,293 @@ class EventCheckInStatsView(APIView):
         )
         payload = {"event_id": str(event_id), **stats}
         return success_response(CheckInStatsResponseSerializer(payload).data, request=request)
+
+
+class QRTokenView(APIView):
+    """GET /registrations/{registration_id}/qr-token/ - encrypted offline QR token."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Offline QR"],
+        summary="Get encrypted QR token for offline validation",
+        description=(
+            "Returns an AES-256-GCM encrypted QR token. Volunteer devices decrypt "
+            "this token locally without a network round-trip, enabling 100% offline "
+            "ticket validation at venues with intermittent connectivity."
+        ),
+        responses={
+            200: OpenApiResponse(description="Encrypted QR token returned."),
+            404: OpenApiResponse(description="Registration not found."),
+        },
+    )
+    def get(self, request: Request, registration_id: uuid.UUID) -> Response:
+        """Generate and return an encrypted QR token for the registration."""
+        from apps.participation.infrastructure.repositories import DjangoRegistrationRepository
+
+        try:
+            reg = DjangoRegistrationRepository().get_by_id(registration_id)
+        except Exception:
+            return error_response(
+                code="ERR_REGISTRATION_NOT_FOUND",
+                message="Registration not found.",
+                http_status=404,
+                request=request,
+            )
+        token = _GEN_QR_UC().execute(registration=reg)
+        return success_response(
+            {"token": token, "registration_id": str(registration_id)},
+            request=request,
+        )
+
+
+class BatchCheckInView(APIView):
+    """POST /check-in/batch/ - sync offline QR check-ins after connectivity restored."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Offline QR"],
+        summary="Batch sync offline check-ins",
+        description=(
+            "Accepts a list of encrypted QR tokens captured while offline. "
+            "Processes each token and returns a per-token result summary."
+        ),
+        responses={
+            200: OpenApiResponse(description="Batch processed."),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        """Process a list of offline QR tokens and return results."""
+        tokens = request.data.get("tokens", [])
+        event_id_str = request.data.get("event_id", "")
+        if not tokens or not event_id_str:
+            return error_response(
+                code="ERR_BATCH_CHECKIN_INVALID",
+                message="tokens (list) and event_id are required.",
+                http_status=400,
+                request=request,
+            )
+        try:
+            event_id = uuid.UUID(event_id_str)
+        except ValueError:
+            return error_response(
+                code="ERR_BATCH_CHECKIN_INVALID_EVENT",
+                message="Invalid event_id.",
+                http_status=400,
+                request=request,
+            )
+        result = _BATCH_CHECKIN_UC(_REG_REPO(), _CHECKIN_REPO()).execute(
+            event_id=event_id,
+            tokens=tokens,
+            staff_user_id=uuid.UUID(str(request.user.id)),
+        )
+        return success_response(result, request=request)
+
+
+class PassportView(APIView):
+    """GET /passport/me/ - Verified Event Passport for the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Passport"],
+        summary="Get Verified Event Passport",
+        description=(
+            "Returns a signed Verified Event Passport containing the user's full "
+            "participation history. The HMAC-SHA256 signature allows offline verification "
+            "of authenticity by any holder."
+        ),
+        responses={200: OpenApiResponse(description="Passport returned.")},
+    )
+    def get(self, request: Request) -> Response:
+        """Build and return the signed passport for the authenticated user."""
+        user_id = uuid.UUID(str(request.user.id))
+        passport = _GET_PASSPORT_UC(_REG_REPO()).execute(user_id=user_id)
+        entries_data = [
+            {
+                "event_id": str(e.event_id),
+                "event_name": e.event_name,
+                "role": e.role,
+                "status": e.status,
+                "attended_at": e.attended_at.isoformat(),
+                "certificate_issued": e.certificate_issued,
+            }
+            for e in passport.entries
+        ]
+        return success_response(
+            {
+                "user_id": str(passport.user_id),
+                "entries": entries_data,
+                "entry_count": len(entries_data),
+                "generated_at": passport.generated_at.isoformat(),
+                "signature": passport.signature,
+            },
+            request=request,
+        )
+
+
+# * Ticket tier views
+
+
+class TicketTierListCreateView(APIView):
+    """List tiers for an event or create a new one (organiser only)."""
+
+    def get_permissions(self) -> list:
+        """GET is public; POST requires authentication."""
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def get(self, request: Request, event_id: uuid.UUID) -> Response:
+        """Return all active tiers for the event."""
+        tiers = TicketTier.objects.filter(event_id=event_id, is_active=True).order_by("price")
+        data = [
+            {
+                "id": str(t.id),
+                "event_id": str(t.event_id),
+                "name": t.name,
+                "tier_type": t.tier_type,
+                "price": str(t.price),
+                "capacity": t.capacity,
+                "sold_count": t.sold_count,
+                "available_spots": max(0, t.capacity - t.sold_count),
+                "description": t.description,
+                "is_active": t.is_active,
+            }
+            for t in tiers
+        ]
+        return success_response(data, request=request)
+
+    def post(self, request: Request, event_id: uuid.UUID) -> Response:
+        """Create a new ticket tier for the event."""
+        from rest_framework import serializers as drf_serializers
+
+        class _S(drf_serializers.Serializer):
+            name = drf_serializers.CharField(max_length=100)
+            tier_type = drf_serializers.ChoiceField(
+                choices=["general", "vip", "early_bird", "comp"], default="general"
+            )
+            price = drf_serializers.DecimalField(max_digits=12, decimal_places=2, default="0.00")
+            capacity = drf_serializers.IntegerField(min_value=1)
+            description = drf_serializers.CharField(max_length=500, required=False, default="")
+
+        ser = _S(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        tier = TicketTier.objects.create(event_id=event_id, **d)
+        return created_response(
+            {
+                "id": str(tier.id),
+                "name": tier.name,
+                "tier_type": tier.tier_type,
+                "price": str(tier.price),
+                "capacity": tier.capacity,
+                "sold_count": 0,
+                "available_spots": tier.capacity,
+            },
+            request=request,
+        )
+
+
+class TicketTierDetailView(APIView):
+    """Update or deactivate a ticket tier."""
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request: Request, event_id: uuid.UUID, tier_id: uuid.UUID) -> Response:
+        """Partially update a tier."""
+        try:
+            tier = TicketTier.objects.get(id=tier_id, event_id=event_id)
+        except TicketTier.DoesNotExist:
+            return error_response(
+                code="ERR_TIER_NOT_FOUND",
+                message="Tier not found.",
+                http_status=404,
+                request=request,
+            )
+        for field in ("name", "price", "capacity", "description", "is_active"):
+            if field in request.data:
+                setattr(tier, field, request.data[field])
+        tier.save()
+        return success_response(
+            {"id": str(tier.id), "name": tier.name, "price": str(tier.price)}, request=request
+        )
+
+    def delete(self, request: Request, event_id: uuid.UUID, tier_id: uuid.UUID) -> Response:
+        """Soft-delete a tier by setting is_active=False."""
+        try:
+            tier = TicketTier.objects.get(id=tier_id, event_id=event_id)
+        except TicketTier.DoesNotExist:
+            return error_response(
+                code="ERR_TIER_NOT_FOUND",
+                message="Tier not found.",
+                http_status=404,
+                request=request,
+            )
+        tier.is_active = False
+        tier.save()
+        return success_response({"deactivated": True}, request=request)
+
+
+#  Custom form field views
+
+
+class CustomFormFieldListCreateView(APIView):
+    """Manage custom registration form fields for an event."""
+
+    def get_permissions(self) -> list:
+        if self.request.method == "GET":
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def get(self, request: Request, event_id: uuid.UUID) -> Response:
+        """Return all form fields for the event."""
+        fields = CustomFormField.objects.filter(event_id=event_id).order_by("position")
+        data = [
+            {
+                "id": str(f.id),
+                "label": f.label,
+                "field_type": f.field_type,
+                "is_required": f.is_required,
+                "options": f.options,
+                "position": f.position,
+            }
+            for f in fields
+        ]
+        return success_response(data, request=request)
+
+    def post(self, request: Request, event_id: uuid.UUID) -> Response:
+        """Add a custom field - max 20 per event."""
+        if CustomFormField.objects.filter(event_id=event_id).count() >= 20:
+            return error_response(
+                code="ERR_FORM_FIELD_LIMIT",
+                message="Maximum 20 custom fields per event.",
+                http_status=422,
+                request=request,
+            )
+        from rest_framework import serializers as drf_serializers
+
+        class _S(drf_serializers.Serializer):
+            label = drf_serializers.CharField(max_length=255)
+            field_type = drf_serializers.ChoiceField(
+                choices=["text", "textarea", "select", "checkbox", "radio"], default="text"
+            )
+            is_required = drf_serializers.BooleanField(default=False)
+            options = drf_serializers.ListField(
+                child=drf_serializers.CharField(), required=False, default=list
+            )
+            position = drf_serializers.IntegerField(min_value=0, default=0)
+
+        ser = _S(data=request.data)
+        ser.is_valid(raise_exception=True)
+        field = CustomFormField.objects.create(event_id=event_id, **ser.validated_data)
+        return created_response(
+            {
+                "id": str(field.id),
+                "label": field.label,
+                "field_type": field.field_type,
+                "is_required": field.is_required,
+            },
+            request=request,
+        )
