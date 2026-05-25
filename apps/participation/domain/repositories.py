@@ -10,6 +10,7 @@ from apps.participation.domain.entities import (
     CheckInEntity,
     EventSummary,
     RegistrationEntity,
+    TicketTransferEntity,
     WaitlistEntryEntity,
 )
 
@@ -111,3 +112,24 @@ class IParticipationContextRepository(ABC):
 
     @abstractmethod
     def delete_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> None: ...
+
+
+class ITicketTransferRepository(ABC):
+    """Persistence contract for TicketTransfer records."""
+
+    @abstractmethod
+    def create(self, entity: TicketTransferEntity) -> TicketTransferEntity: ...
+
+    @abstractmethod
+    def get_by_token(self, token: uuid.UUID) -> TicketTransferEntity | None: ...
+
+    @abstractmethod
+    def get_by_id(self, transfer_id: uuid.UUID) -> TicketTransferEntity | None: ...
+
+    @abstractmethod
+    def get_pending_for_registration(
+        self, registration_id: uuid.UUID
+    ) -> TicketTransferEntity | None: ...
+
+    @abstractmethod
+    def update(self, entity: TicketTransferEntity) -> TicketTransferEntity: ...

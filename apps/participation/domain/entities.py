@@ -155,6 +155,20 @@ class RegistrationAnswerEntity:
     value: str
 
 
+@dataclass(slots=True)
+class TicketTransferEntity:
+    """A pending or completed ticket ownership transfer between two users."""
+
+    id: uuid.UUID
+    registration_id: uuid.UUID
+    from_user_id: uuid.UUID
+    to_email: str
+    token: uuid.UUID
+    status: str  # pending / completed / cancelled / expired
+    created_at: datetime
+    expires_at: datetime
+
+
 @dataclass(frozen=True)
 class EventSummary:
     """Read-only snapshot of an event fetched from the event-service."""

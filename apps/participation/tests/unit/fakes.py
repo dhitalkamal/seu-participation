@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Sequence
 
 from apps.participation.domain.entities import (
     CheckInEntity,
     EventSummary,
     RegistrationEntity,
+    TicketTransferEntity,
     WaitlistEntryEntity,
 )
 from apps.participation.domain.exceptions import EventNotFoundError, RegistrationNotFoundError
@@ -19,6 +20,7 @@ from apps.participation.domain.repositories import (
     IEventPublisher,
     IParticipationContextRepository,
     IRegistrationRepository,
+    ITicketTransferRepository,
     IWaitlistRepository,
 )
 
@@ -237,3 +239,58 @@ class FakeParticipationContextRepository(IParticipationContextRepository):
     def delete_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> None:
         """Remove the context entry for this (event, user) pair."""
         self._store.pop((event_id, user_id), None)
+
+
+def make_transfer(**kwargs: object) -> TicketTransferEntity:
+    """Build a TicketTransferEntity with sensible defaults for testing."""
+    now = datetime.now(timezone.utc)
+    defaults: dict = {
+        "id": uuid.uuid4(),
+        "registration_id": uuid.uuid4(),
+        "from_user_id": uuid.uuid4(),
+        "to_email": "recipient@example.com",
+        "token": uuid.uuid4(),
+        "status": "pending",
+        "created_at": now,
+        "expires_at": now + timedelta(hours=48),
+    }
+    defaults.update(kwargs)
+    return TicketTransferEntity(**defaults)  # type: ignore[arg-type]
+
+
+class FakeTicketTransferRepository(ITicketTransferRepository):
+    """In-memory ticket transfer store."""
+
+    def __init__(self, transfers: Sequence[TicketTransferEntity] | None = None) -> None:
+        self._store: dict[uuid.UUID, TicketTransferEntity] = {t.id: t for t in (transfers or [])}
+
+    def create(self, entity: TicketTransferEntity) -> TicketTransferEntity:
+        """Persist and return the entity."""
+        self._store[entity.id] = entity
+        return entity
+
+    def get_by_token(self, token: uuid.UUID) -> TicketTransferEntity | None:
+        """Return the transfer matching the token or None."""
+        return next((t for t in self._store.values() if t.token == token), None)
+
+    def get_by_id(self, transfer_id: uuid.UUID) -> TicketTransferEntity | None:
+        """Return the transfer by id or None."""
+        return self._store.get(transfer_id)
+
+    def get_pending_for_registration(
+        self, registration_id: uuid.UUID
+    ) -> TicketTransferEntity | None:
+        """Return the pending transfer for this registration or None."""
+        return next(
+            (
+                t
+                for t in self._store.values()
+                if t.registration_id == registration_id and t.status == "pending"
+            ),
+            None,
+        )
+
+    def update(self, entity: TicketTransferEntity) -> TicketTransferEntity:
+        """Overwrite the stored entity and return it."""
+        self._store[entity.id] = entity
+        return entity
