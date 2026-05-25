@@ -13,6 +13,7 @@ from apps.participation.domain.exceptions import (
 )
 from apps.participation.tests.unit.fakes import (
     FakeEventPublisher,
+    FakeParticipationContextRepository,
     FakeRegistrationRepository,
     FakeWaitlistRepository,
     make_registration,
@@ -20,11 +21,12 @@ from apps.participation.tests.unit.fakes import (
 )
 
 
-def _uc(regs=None, waitlist=None, publisher=None) -> CancelRegistrationUseCase:
+def _uc(regs=None, waitlist=None, publisher=None, context_repo=None) -> CancelRegistrationUseCase:
     return CancelRegistrationUseCase(
         reg_repo=FakeRegistrationRepository(regs or []),
         waitlist_repo=FakeWaitlistRepository(waitlist or []),
         publisher=publisher or FakeEventPublisher(),
+        context_repo=context_repo,
     )
 
 
@@ -122,3 +124,14 @@ def test_cancel_publishes_registration_cancelled_event():
     assert len(cancelled_events) == 1
     assert cancelled_events[0]["payload"]["registration_id"] == str(reg.id)
     assert cancelled_events[0]["payload"]["user_id"] == str(user_id)
+
+
+def test_cancel_clears_participation_context():
+    """Cancellation removes the attendee context so the user can volunteer later."""
+    user_id = uuid.uuid4()
+    event_id = uuid.uuid4()
+    reg = make_registration(user_id=user_id, event_id=event_id, status="confirmed")
+    context_repo = FakeParticipationContextRepository()
+    context_repo.set_context(event_id, user_id, "attendee")
+    _uc(regs=[reg], context_repo=context_repo).execute(registration_id=reg.id, user_id=user_id)
+    assert context_repo.get_context(event_id, user_id) is None

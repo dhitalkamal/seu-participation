@@ -91,3 +91,23 @@ class IEventPublisher(ABC):
 
     @abstractmethod
     def publish(self, *, routing_key: str, payload: dict) -> None: ...
+
+
+class IParticipationContextRepository(ABC):
+    """Tracks which capacity (attendee vs volunteer) each user holds for an event."""
+
+    @abstractmethod
+    def has_context(
+        self, event_id: uuid.UUID, user_id: uuid.UUID, participation_type: str
+    ) -> bool: ...
+
+    @abstractmethod
+    def get_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> str | None: ...
+
+    @abstractmethod
+    def set_context(
+        self, event_id: uuid.UUID, user_id: uuid.UUID, participation_type: str
+    ) -> None: ...
+
+    @abstractmethod
+    def delete_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> None: ...

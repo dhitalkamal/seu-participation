@@ -17,6 +17,7 @@ from apps.participation.domain.repositories import (
     ICheckInRepository,
     IEventClient,
     IEventPublisher,
+    IParticipationContextRepository,
     IRegistrationRepository,
     IWaitlistRepository,
 )
@@ -213,3 +214,26 @@ class FakeEventPublisher(IEventPublisher):
     def publish(self, *, routing_key: str, payload: dict) -> None:
         """Record the published event."""
         self.events.append({"routing_key": routing_key, "payload": payload})
+
+
+class FakeParticipationContextRepository(IParticipationContextRepository):
+    """In-memory participation context store keyed by (event_id, user_id)."""
+
+    def __init__(self) -> None:
+        self._store: dict[tuple[uuid.UUID, uuid.UUID], str] = {}
+
+    def has_context(self, event_id: uuid.UUID, user_id: uuid.UUID, participation_type: str) -> bool:
+        """True if the stored context matches the given type."""
+        return self._store.get((event_id, user_id)) == participation_type
+
+    def get_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> str | None:
+        """Return the stored participation type or None if no context exists."""
+        return self._store.get((event_id, user_id))
+
+    def set_context(self, event_id: uuid.UUID, user_id: uuid.UUID, participation_type: str) -> None:
+        """Persist the participation type for this (event, user) pair."""
+        self._store[(event_id, user_id)] = participation_type
+
+    def delete_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        """Remove the context entry for this (event, user) pair."""
+        self._store.pop((event_id, user_id), None)

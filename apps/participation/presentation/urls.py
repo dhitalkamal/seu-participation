@@ -10,6 +10,7 @@ from .views import (
     CheckInView,
     EventCheckInStatsView,
     HealthCheckView,
+    InternalParticipationContextView,
     MyShiftsView,
     PassportView,
     QRTokenView,
@@ -45,5 +46,10 @@ urlpatterns: list[URLPattern] = [
     path("waitlist/<uuid:entry_id>/accept/", WaitlistAcceptView.as_view(), name="waitlist-accept"),
     path(
         "waitlist/<uuid:entry_id>/decline/", WaitlistDeclineView.as_view(), name="waitlist-decline"
+    ),
+    path(
+        "internal/participation-context/<uuid:event_id>/<uuid:user_id>/",
+        InternalParticipationContextView.as_view(),
+        name="internal-participation-context",
     ),
 ]

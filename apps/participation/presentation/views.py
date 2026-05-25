@@ -37,6 +37,7 @@ from apps.participation.infrastructure.models import CustomFormField, TicketTier
 from apps.participation.infrastructure.publisher import RabbitMQEventPublisher
 from apps.participation.infrastructure.repositories import (
     DjangoCheckInRepository,
+    DjangoParticipationContextRepository,
     DjangoRegistrationRepository,
     DjangoRegistrationStatsRepository,
     DjangoVolunteerShiftRepository,
@@ -65,6 +66,7 @@ _EVENT_CLIENT = HttpEventClient
 _REG_REPO = DjangoRegistrationRepository
 _CHECKIN_REPO = DjangoCheckInRepository
 _WAITLIST_REPO = DjangoWaitlistRepository
+_CONTEXT_REPO = DjangoParticipationContextRepository
 _CANCEL_SER = CancelSerializer
 _CHECKIN_RESP_SER = CheckInResponseSerializer
 _CHECKIN_SER = CheckInSerializer
@@ -247,6 +249,7 @@ class RegisterView(APIView):
             waitlist_repo=_WAITLIST_REPO(),
             event_client=_EVENT_CLIENT(settings.EVENT_SERVICE_URL),
             publisher=_PUBLISHER(),
+            context_repo=_CONTEXT_REPO(),
         ).execute(
             event_id=d["event_id"],
             user_id=uuid.UUID(str(request.user.id)),
@@ -289,6 +292,7 @@ class CancelRegistrationView(APIView):
             reg_repo=_REG_REPO(),
             waitlist_repo=_WAITLIST_REPO(),
             publisher=_PUBLISHER(),
+            context_repo=_CONTEXT_REPO(),
         ).execute(
             registration_id=d["registration_id"],
             user_id=uuid.UUID(str(request.user.id)),
@@ -745,3 +749,44 @@ class WaitlistDeclineView(APIView):
             publisher=RabbitMQEventPublisher(),
         ).execute(entry_id=entry_id, user_id=user_id)
         return success_response({"declined": True}, request=request)
+
+
+class InternalParticipationContextView(APIView):
+    """Internal endpoint used by management-service to read and write participation context."""
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(exclude=True)
+    def get(self, request: Request, event_id: uuid.UUID, user_id: uuid.UUID) -> Response:
+        """Return the participation_type for this (event, user) pair, or 404 if absent."""
+        from django.http import JsonResponse
+
+        from apps.participation.infrastructure.repositories import (
+            DjangoParticipationContextRepository,
+        )
+
+        participation_type = DjangoParticipationContextRepository().get_context(event_id, user_id)
+        if participation_type is None:
+            return JsonResponse({"detail": "Not found."}, status=404)
+        return JsonResponse({"participation_type": participation_type})
+
+    @extend_schema(exclude=True)
+    def post(self, request: Request, event_id: uuid.UUID, user_id: uuid.UUID) -> Response:
+        """Upsert the participation context for this (event, user) pair."""
+        import json as _json
+
+        from django.http import JsonResponse
+
+        from apps.participation.infrastructure.repositories import (
+            DjangoParticipationContextRepository,
+        )
+
+        try:
+            body = _json.loads(request.body)
+            participation_type = body["participation_type"]
+        except (KeyError, _json.JSONDecodeError):
+            return JsonResponse({"detail": "participation_type is required."}, status=400)
+
+        DjangoParticipationContextRepository().set_context(event_id, user_id, participation_type)
+        return JsonResponse({"participation_type": participation_type})

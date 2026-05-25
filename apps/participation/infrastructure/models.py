@@ -308,3 +308,22 @@ class RegistrationAnswer(models.Model):
     registration = models.ForeignKey(Registration, on_delete=models.CASCADE, related_name="answers")
     field = models.ForeignKey(CustomFormField, on_delete=models.CASCADE, related_name="answers")
     value = models.TextField()
+
+
+class EventParticipationContext(models.Model):
+    """Records whether a user is participating in an event as attendee or volunteer."""
+
+    class Meta:
+        db_table = '"participation"."event_participation_context"'
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event_id", "user_id"],
+                name="unique_event_participation_context",
+            )
+        ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_id = models.UUIDField(db_index=True)
+    user_id = models.UUIDField(db_index=True)
+    participation_type = models.CharField(max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True)

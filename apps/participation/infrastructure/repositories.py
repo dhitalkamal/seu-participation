@@ -13,10 +13,16 @@ from apps.participation.domain.entities import (
 from apps.participation.domain.exceptions import RegistrationNotFoundError
 from apps.participation.domain.repositories import (
     ICheckInRepository,
+    IParticipationContextRepository,
     IRegistrationRepository,
     IWaitlistRepository,
 )
-from apps.participation.infrastructure.models import CheckIn, Registration, WaitlistEntry
+from apps.participation.infrastructure.models import (
+    CheckIn,
+    EventParticipationContext,
+    Registration,
+    WaitlistEntry,
+)
 
 
 class DjangoRegistrationRepository(IRegistrationRepository):
@@ -170,3 +176,30 @@ class DjangoRegistrationStatsRepository:
     def count_checked_in_for_event(self, event_id: uuid.UUID) -> int:
         """How many attendees have been checked in for an event."""
         return Registration.objects.filter(event_id=event_id, status="checked_in").count()
+
+
+class DjangoParticipationContextRepository(IParticipationContextRepository):
+    """Persists EventParticipationContext records using the Django ORM."""
+
+    def has_context(self, event_id: uuid.UUID, user_id: uuid.UUID, participation_type: str) -> bool:
+        """True if a context row exists with the given type for this (event, user) pair."""
+        return EventParticipationContext.objects.filter(
+            event_id=event_id, user_id=user_id, participation_type=participation_type
+        ).exists()
+
+    def get_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> str | None:
+        """Return the participation_type string or None if no row exists."""
+        obj = EventParticipationContext.objects.filter(event_id=event_id, user_id=user_id).first()
+        return obj.participation_type if obj else None
+
+    def set_context(self, event_id: uuid.UUID, user_id: uuid.UUID, participation_type: str) -> None:
+        """Upsert the participation context for this (event, user) pair."""
+        EventParticipationContext.objects.update_or_create(
+            event_id=event_id,
+            user_id=user_id,
+            defaults={"participation_type": participation_type},
+        )
+
+    def delete_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        """Remove the participation context row for this (event, user) pair."""
+        EventParticipationContext.objects.filter(event_id=event_id, user_id=user_id).delete()

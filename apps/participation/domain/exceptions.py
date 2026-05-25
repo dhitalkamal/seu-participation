@@ -66,3 +66,10 @@ class WaitlistOfferAlreadyRespondedError(DomainError):
 
     http_status = 409
     code = "ERR_WAITLIST_OFFER_ALREADY_RESPONDED"
+
+
+class ParticipationConflictError(DomainError):
+    """User is already participating in this event in a different capacity."""
+
+    http_status = 409
+    code = "ERR_PARTICIPATION_CONFLICT"

@@ -15,6 +15,7 @@ from apps.participation.domain.exceptions import (
 )
 from apps.participation.domain.repositories import (
     IEventPublisher,
+    IParticipationContextRepository,
     IRegistrationRepository,
     IWaitlistRepository,
 )
@@ -31,10 +32,12 @@ class CancelRegistrationUseCase:
         reg_repo: IRegistrationRepository,
         waitlist_repo: IWaitlistRepository,
         publisher: IEventPublisher | None = None,
+        context_repo: IParticipationContextRepository | None = None,
     ) -> None:
         self._regs = reg_repo
         self._waitlist = waitlist_repo
         self._publisher = publisher
+        self._context = context_repo
 
     def execute(
         self, *, registration_id: uuid.UUID, user_id: uuid.UUID, email: str = ""
@@ -65,6 +68,9 @@ class CancelRegistrationUseCase:
         registration.cancelled_at = now
         registration.updated_at = now
         self._regs.update(registration)
+
+        if self._context is not None:
+            self._context.delete_context(registration.event_id, user_id)
 
         # * promote the next pending waitlist entry to offered (24h acceptance window)
         if self._publisher is not None:
