@@ -15,11 +15,17 @@ dependencies = [
     "pika",
     "drf-spectacular",
     "cryptography>=48.0.0",
+    "celery[redis]>=5.3",
+    "django-celery-beat>=2.6",
 ]
 
 [dependency-groups]
 dev = [
+    "django-stubs>=6.0.4",
+    "djangorestframework-stubs>=3.17.0",
+    "mypy>=2.1.0",
     "pytest>=8.0",
+    "pytest-cov>=7.1.0",
     "pytest-django>=4.8",
     "ruff>=0.9",
 ]
@@ -36,3 +42,20 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
+
+[tool.mypy]
+plugins = ["mypy_django_plugin.main"]
+ignore_missing_imports = true
+exclude = ["migrations/", "tests/"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.development"
+
+[[tool.mypy.overrides]]
+module = [
+    "apps.participation.infrastructure.*",
+    "apps.participation.presentation.*",
+    "apps.common.*",
+    "config.*",
+]
+ignore_errors = true

@@ -22,6 +22,7 @@ class RegistrationEntity:
     checked_in_at: datetime | None = None
     cancelled_at: datetime | None = None
     notes: str | None = None
+    networking_opt_in: bool = False
 
 
 @dataclass(slots=True)
@@ -45,6 +46,8 @@ class WaitlistEntryEntity:
     user_id: uuid.UUID
     position: int
     created_at: datetime
+    status: str = "pending"
+    offered_at: datetime | None = None
     expires_at: datetime | None = None
 
 

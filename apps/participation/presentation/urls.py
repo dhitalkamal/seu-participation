@@ -15,6 +15,8 @@ from .views import (
     QRTokenView,
     RegisterView,
     RegistrationDetailView,
+    WaitlistAcceptView,
+    WaitlistDeclineView,
 )
 
 urlpatterns: list[URLPattern] = [
@@ -40,4 +42,8 @@ urlpatterns: list[URLPattern] = [
         name="volunteer-event-stats",
     ),
     path("passport/me/", PassportView.as_view(), name="passport-me"),
+    path("waitlist/<uuid:entry_id>/accept/", WaitlistAcceptView.as_view(), name="waitlist-accept"),
+    path(
+        "waitlist/<uuid:entry_id>/decline/", WaitlistDeclineView.as_view(), name="waitlist-decline"
+    ),
 ]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 from apps.participation.domain.entities import (
     CheckInEntity,
@@ -57,16 +58,25 @@ class IWaitlistRepository(ABC):
     def add(self, entity: WaitlistEntryEntity) -> WaitlistEntryEntity: ...
 
     @abstractmethod
+    def get_by_id(self, entry_id: uuid.UUID) -> WaitlistEntryEntity | None: ...
+
+    @abstractmethod
     def has_entry(self, event_id: uuid.UUID, user_id: uuid.UUID) -> bool: ...
 
     @abstractmethod
-    def next_in_queue(self, event_id: uuid.UUID) -> WaitlistEntryEntity | None: ...
+    def next_pending_in_queue(self, event_id: uuid.UUID) -> WaitlistEntryEntity | None: ...
+
+    @abstractmethod
+    def update(self, entity: WaitlistEntryEntity) -> WaitlistEntryEntity: ...
 
     @abstractmethod
     def remove(self, entry_id: uuid.UUID) -> None: ...
 
     @abstractmethod
     def count_for_event(self, event_id: uuid.UUID) -> int: ...
+
+    @abstractmethod
+    def list_offered_before(self, cutoff: datetime) -> list[WaitlistEntryEntity]: ...
 
 
 class IEventClient(ABC):

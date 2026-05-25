@@ -22,6 +22,23 @@ from apps.participation.domain.repositories import (
 )
 
 
+def make_waitlist_entry(**kwargs: object) -> WaitlistEntryEntity:
+    """Build a WaitlistEntryEntity with sensible defaults for testing."""
+    now = datetime.now(timezone.utc)
+    defaults: dict = {
+        "id": uuid.uuid4(),
+        "event_id": uuid.uuid4(),
+        "user_id": uuid.uuid4(),
+        "position": 1,
+        "created_at": now,
+        "status": "pending",
+        "offered_at": None,
+        "expires_at": None,
+    }
+    defaults.update(kwargs)
+    return WaitlistEntryEntity(**defaults)  # type: ignore[arg-type]
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -137,14 +154,25 @@ class FakeWaitlistRepository(IWaitlistRepository):
         self._store[entity.id] = entity
         return entity
 
+    def get_by_id(self, entry_id: uuid.UUID) -> WaitlistEntryEntity | None:
+        """Return the entry or None if absent."""
+        return self._store.get(entry_id)
+
     def has_entry(self, event_id: uuid.UUID, user_id: uuid.UUID) -> bool:
         """True if the user is already in the waitlist for this event."""
         return any(e.event_id == event_id and e.user_id == user_id for e in self._store.values())
 
-    def next_in_queue(self, event_id: uuid.UUID) -> WaitlistEntryEntity | None:
-        """Return the entry with the lowest position for this event."""
-        entries = [e for e in self._store.values() if e.event_id == event_id]
+    def next_pending_in_queue(self, event_id: uuid.UUID) -> WaitlistEntryEntity | None:
+        """Return the pending entry with the lowest position for this event."""
+        entries = [
+            e for e in self._store.values() if e.event_id == event_id and e.status == "pending"
+        ]
         return min(entries, key=lambda e: e.position) if entries else None
+
+    def update(self, entity: WaitlistEntryEntity) -> WaitlistEntryEntity:
+        """Overwrite the stored entry and return it."""
+        self._store[entity.id] = entity
+        return entity
 
     def remove(self, entry_id: uuid.UUID) -> None:
         """Delete the entry by id."""
@@ -153,6 +181,14 @@ class FakeWaitlistRepository(IWaitlistRepository):
     def count_for_event(self, event_id: uuid.UUID) -> int:
         """Count all waitlist entries for this event."""
         return sum(1 for e in self._store.values() if e.event_id == event_id)
+
+    def list_offered_before(self, cutoff: datetime) -> list[WaitlistEntryEntity]:
+        """Return all offered entries whose expires_at is at or before the cutoff."""
+        return [
+            e
+            for e in self._store.values()
+            if e.status == "offered" and e.expires_at is not None and e.expires_at <= cutoff
+        ]
 
 
 class FakeEventClient(IEventClient):

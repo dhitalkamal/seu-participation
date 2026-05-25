@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "corsheaders",
     "drf_spectacular",
+    "django_celery_beat",
     "apps.participation",
 ]
 
@@ -111,6 +112,16 @@ CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
 REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
 RABBITMQ_URL = config("RABBITMQ_URL", default="amqp://guest:guest@localhost:5672/")
 EVENT_SERVICE_URL = config("EVENT_SERVICE_URL", default="http://event:8002")
+
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_TIMEZONE = "UTC"
+CELERY_BEAT_SCHEDULE = {
+    "expire-stale-waitlist-offers": {
+        "task": "apps.participation.tasks.expire_stale_offers",
+        "schedule": 300,  # every 5 minutes
+    },
+}
 
 CACHES = {
     "default": {

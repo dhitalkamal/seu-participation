@@ -45,3 +45,24 @@ class InvalidQRTokenError(DomainError):
 
     http_status = 422
     code = "ERR_QR_TOKEN_INVALID"
+
+
+class WaitlistOfferNotFoundError(DomainError):
+    """No waitlist offer matches the given identifier or belongs to the user."""
+
+    http_status = 404
+    code = "ERR_WAITLIST_OFFER_NOT_FOUND"
+
+
+class WaitlistOfferExpiredError(DomainError):
+    """The 24-hour acceptance window for this waitlist offer has passed."""
+
+    http_status = 422
+    code = "ERR_WAITLIST_OFFER_EXPIRED"
+
+
+class WaitlistOfferAlreadyRespondedError(DomainError):
+    """The offer was already accepted or declined."""
+
+    http_status = 409
+    code = "ERR_WAITLIST_OFFER_ALREADY_RESPONDED"

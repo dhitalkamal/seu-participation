@@ -252,6 +252,8 @@ class RegisterView(APIView):
             user_id=uuid.UUID(str(request.user.id)),
             quantity=d["quantity"],
             notes=d.get("notes"),
+            email=request.user.token.get("email", ""),
+            networking_opt_in=d.get("networking_opt_in", False),
         )
 
         if isinstance(result, _WAITLIST_ENTITY):
@@ -290,6 +292,7 @@ class CancelRegistrationView(APIView):
         ).execute(
             registration_id=d["registration_id"],
             user_id=uuid.UUID(str(request.user.id)),
+            email=request.user.token.get("email", ""),
         )
         return success_response(_REG_RESP_SER(result).data, request=request)
 
@@ -681,3 +684,64 @@ class CustomFormFieldListCreateView(APIView):
             },
             request=request,
         )
+
+
+class WaitlistAcceptView(APIView):
+    """Accept a waitlist offer within the 24h acceptance window."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Waitlist"],
+        summary="Accept waitlist offer",
+        description="Accept a waitlist offer. Creates a confirmed registration.",
+        responses={
+            200: OpenApiResponse(description="Offer accepted; registration created."),
+            404: OpenApiResponse(description="Offer not found or not owned by current user."),
+            409: OpenApiResponse(description="Offer already responded to."),
+            422: OpenApiResponse(description="Acceptance window has expired."),
+        },
+    )
+    def post(self, request: Request, entry_id: uuid.UUID) -> Response:
+        """Accept the waitlist offer identified by entry_id."""
+        from apps.participation.application.use_cases.accept_waitlist_offer import (
+            AcceptWaitlistOfferUseCase,
+        )
+
+        user_id = uuid.UUID(str(request.user.id))
+        registration = AcceptWaitlistOfferUseCase(
+            waitlist_repo=DjangoWaitlistRepository(),
+            reg_repo=DjangoRegistrationRepository(),
+            publisher=RabbitMQEventPublisher(),
+        ).execute(entry_id=entry_id, user_id=user_id)
+        ser = RegistrationResponseSerializer(registration)
+        return success_response(ser.data, request=request)
+
+
+class WaitlistDeclineView(APIView):
+    """Decline a waitlist offer, freeing the slot for the next person."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Waitlist"],
+        summary="Decline waitlist offer",
+        description="Decline a waitlist offer. Removes the entry from the waitlist.",
+        responses={
+            200: OpenApiResponse(description="Offer declined."),
+            404: OpenApiResponse(description="Offer not found or not owned by current user."),
+            409: OpenApiResponse(description="Offer already responded to."),
+        },
+    )
+    def post(self, request: Request, entry_id: uuid.UUID) -> Response:
+        """Decline the waitlist offer identified by entry_id."""
+        from apps.participation.application.use_cases.decline_waitlist_offer import (
+            DeclineWaitlistOfferUseCase,
+        )
+
+        user_id = uuid.UUID(str(request.user.id))
+        DeclineWaitlistOfferUseCase(
+            waitlist_repo=DjangoWaitlistRepository(),
+            publisher=RabbitMQEventPublisher(),
+        ).execute(entry_id=entry_id, user_id=user_id)
+        return success_response({"declined": True}, request=request)

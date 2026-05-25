@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from apps.participation.domain.entities import (
     CheckInEntity,
@@ -98,14 +99,34 @@ class DjangoWaitlistRepository(IWaitlistRepository):
         obj.save(using="default")
         return obj.to_entity()
 
+    def get_by_id(self, entry_id: uuid.UUID) -> WaitlistEntryEntity | None:
+        """Return the entry entity or None if not found."""
+        try:
+            return WaitlistEntry.objects.get(id=entry_id).to_entity()
+        except WaitlistEntry.DoesNotExist:
+            return None
+
     def has_entry(self, event_id: uuid.UUID, user_id: uuid.UUID) -> bool:
         """True if the user is already in the waitlist for this event."""
         return WaitlistEntry.objects.filter(event_id=event_id, user_id=user_id).exists()
 
-    def next_in_queue(self, event_id: uuid.UUID) -> WaitlistEntryEntity | None:
-        """Return the entry with the lowest position, or None if the queue is empty."""
-        obj = WaitlistEntry.objects.filter(event_id=event_id).order_by("position").first()
+    def next_pending_in_queue(self, event_id: uuid.UUID) -> WaitlistEntryEntity | None:
+        """Return the pending entry with the lowest position, or None if none exist."""
+        obj = (
+            WaitlistEntry.objects.filter(event_id=event_id, status="pending")
+            .order_by("position")
+            .first()
+        )
         return obj.to_entity() if obj else None
+
+    def update(self, entity: WaitlistEntryEntity) -> WaitlistEntryEntity:
+        """Fetch the existing row, update mutable fields, and save."""
+        obj = WaitlistEntry.objects.get(id=entity.id)
+        obj.status = entity.status
+        obj.offered_at = entity.offered_at
+        obj.expires_at = entity.expires_at
+        obj.save()
+        return obj.to_entity()
 
     def remove(self, entry_id: uuid.UUID) -> None:
         """Delete the waitlist entry by id."""
@@ -114,6 +135,13 @@ class DjangoWaitlistRepository(IWaitlistRepository):
     def count_for_event(self, event_id: uuid.UUID) -> int:
         """Count all waitlist entries for this event (used for position calculation)."""
         return WaitlistEntry.objects.filter(event_id=event_id).count()
+
+    def list_offered_before(self, cutoff: datetime) -> list[WaitlistEntryEntity]:
+        """Return all offered entries whose expires_at is at or before cutoff."""
+        return [
+            obj.to_entity()
+            for obj in WaitlistEntry.objects.filter(status="offered", expires_at__lte=cutoff)
+        ]
 
 
 class DjangoVolunteerShiftRepository:

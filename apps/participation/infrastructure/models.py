@@ -44,6 +44,7 @@ class Registration(models.Model):
     notes = models.TextField(null=True, blank=True)
     checked_in_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    networking_opt_in = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -61,6 +62,7 @@ class Registration(models.Model):
             checked_in_at=self.checked_in_at,
             cancelled_at=self.cancelled_at,
             notes=self.notes,
+            networking_opt_in=self.networking_opt_in,
         )
 
     @classmethod
@@ -76,6 +78,7 @@ class Registration(models.Model):
             checked_in_at=entity.checked_in_at,
             cancelled_at=entity.cancelled_at,
             notes=entity.notes,
+            networking_opt_in=entity.networking_opt_in,
         )
 
 
@@ -124,6 +127,11 @@ class CheckIn(models.Model):
 class WaitlistEntry(models.Model):
     """A queued position for a user waiting for a spot at a full event."""
 
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        OFFERED = "offered", "Offered"
+        EXPIRED = "expired", "Expired"
+
     class Meta:
         db_table = '"participation"."waitlist_entry"'
         constraints = [
@@ -137,6 +145,8 @@ class WaitlistEntry(models.Model):
     event_id = models.UUIDField()
     user_id = models.UUIDField()
     position = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    offered_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -148,6 +158,8 @@ class WaitlistEntry(models.Model):
             user_id=self.user_id,
             position=self.position,
             created_at=self.created_at,
+            status=self.status,
+            offered_at=self.offered_at,
             expires_at=self.expires_at,
         )
 
@@ -159,6 +171,8 @@ class WaitlistEntry(models.Model):
             event_id=entity.event_id,
             user_id=entity.user_id,
             position=entity.position,
+            status=entity.status,
+            offered_at=entity.offered_at,
             expires_at=entity.expires_at,
         )
 
