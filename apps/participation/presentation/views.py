@@ -14,8 +14,10 @@ from rest_framework.views import APIView
 
 from apps.common.api.responses import created_response, error_response, success_response
 from apps.common.health import check_database, check_rabbitmq, check_redis
+from apps.participation.application.use_cases.accept_transfer import AcceptTransferUseCase
 from apps.participation.application.use_cases.batch_checkin import BatchCheckInUseCase
 from apps.participation.application.use_cases.cancel import CancelRegistrationUseCase
+from apps.participation.application.use_cases.cancel_transfer import CancelTransferUseCase
 from apps.participation.application.use_cases.check_in import CheckInUseCase
 from apps.participation.application.use_cases.generate_qr_token import GenerateQRTokenUseCase
 from apps.participation.application.use_cases.get_event_checkin_stats import (
@@ -23,6 +25,7 @@ from apps.participation.application.use_cases.get_event_checkin_stats import (
 )
 from apps.participation.application.use_cases.get_passport import GetPassportUseCase
 from apps.participation.application.use_cases.get_registration import GetRegistrationUseCase
+from apps.participation.application.use_cases.initiate_transfer import InitiateTransferUseCase
 from apps.participation.application.use_cases.list_my_registrations import (
     ListMyRegistrationsUseCase,
 )
@@ -40,6 +43,7 @@ from apps.participation.infrastructure.repositories import (
     DjangoParticipationContextRepository,
     DjangoRegistrationRepository,
     DjangoRegistrationStatsRepository,
+    DjangoTicketTransferRepository,
     DjangoVolunteerShiftRepository,
     DjangoWaitlistRepository,
 )
@@ -48,8 +52,10 @@ from apps.participation.presentation.serializers import (
     CheckInResponseSerializer,
     CheckInSerializer,
     CheckInStatsResponseSerializer,
+    InitiateTransferSerializer,
     RegisterSerializer,
     RegistrationResponseSerializer,
+    TicketTransferResponseSerializer,
     VolunteerShiftResponseSerializer,
     WaitlistResponseSerializer,
 )
@@ -82,6 +88,12 @@ _VERIFY_PASSPORT_UC = VerifyPassportUseCase
 _INVALID_QR_ERROR = InvalidQRTokenError
 _CREATED = created_response
 _UUID = uuid.UUID
+_INITIATE_TRANSFER_UC = InitiateTransferUseCase
+_ACCEPT_TRANSFER_UC = AcceptTransferUseCase
+_CANCEL_TRANSFER_UC = CancelTransferUseCase
+_TRANSFER_REPO = DjangoTicketTransferRepository
+_INITIATE_TRANSFER_SER = InitiateTransferSerializer
+_TRANSFER_RESP_SER = TicketTransferResponseSerializer
 
 _CHECKS = inline_serializer(
     name="DependencyChecks",
@@ -790,3 +802,105 @@ class InternalParticipationContextView(APIView):
 
         DjangoParticipationContextRepository().set_context(event_id, user_id, participation_type)
         return JsonResponse({"participation_type": participation_type})
+
+
+class InitiateTransferView(APIView):
+    """Initiate a ticket ownership transfer for a confirmed registration."""
+
+    permission_classes = [_IS_AUTH]
+
+    @extend_schema(
+        tags=["Transfers"],
+        summary="Initiate a ticket transfer",
+        description=(
+            "Creates a pending transfer token for the specified registration. "
+            "The recipient has 48 hours to accept via the accept endpoint."
+        ),
+        request=_INITIATE_TRANSFER_SER,
+        responses={
+            201: OpenApiResponse(description="Transfer initiated.", response=_TRANSFER_RESP_SER),
+            400: OpenApiResponse(description="Invalid request payload."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+            404: OpenApiResponse(description="Registration not found."),
+            409: OpenApiResponse(description="Transfer not allowed or already pending."),
+        },
+    )
+    def post(self, request: Request, registration_id: _UUID) -> Response:
+        """Validate ownership and create a pending transfer."""
+        ser = _INITIATE_TRANSFER_SER(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        result = _INITIATE_TRANSFER_UC(
+            reg_repo=_REG_REPO(),
+            transfer_repo=_TRANSFER_REPO(),
+            publisher=_PUBLISHER(),
+        ).execute(
+            registration_id=registration_id,
+            from_user_id=_UUID(str(request.user.id)),
+            to_email=ser.validated_data["to_email"],
+        )
+        return _CREATED(_TRANSFER_RESP_SER(result).data, request=request)
+
+
+class AcceptTransferView(APIView):
+    """Accept a pending ticket transfer using the one-time token."""
+
+    permission_classes = [_IS_AUTH]
+
+    @extend_schema(
+        tags=["Transfers"],
+        summary="Accept a ticket transfer",
+        description=(
+            "Accepts the pending transfer identified by token, cancels the original "
+            "registration, and creates a new confirmed registration for the caller."
+        ),
+        responses={
+            201: OpenApiResponse(
+                description="Transfer accepted, new registration created.",
+                response=RegistrationResponseSerializer,
+            ),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+            404: OpenApiResponse(description="Transfer not found."),
+            409: OpenApiResponse(description="Transfer already accepted or cancelled."),
+            422: OpenApiResponse(description="Transfer has expired."),
+        },
+    )
+    def post(self, request: Request, token: _UUID) -> Response:
+        """Accept the transfer and return the new registration."""
+        result = _ACCEPT_TRANSFER_UC(
+            reg_repo=_REG_REPO(),
+            transfer_repo=_TRANSFER_REPO(),
+        ).execute(
+            token=token,
+            recipient_user_id=_UUID(str(request.user.id)),
+        )
+        return _CREATED(_REG_RESP_SER(result).data, request=request)
+
+
+class CancelTransferView(APIView):
+    """Cancel a pending transfer initiated by the authenticated user."""
+
+    permission_classes = [_IS_AUTH]
+
+    @extend_schema(
+        tags=["Transfers"],
+        summary="Cancel a ticket transfer",
+        description=(
+            "Cancels a pending transfer. Only the user who initiated the transfer can cancel it."
+        ),
+        responses={
+            200: OpenApiResponse(description="Transfer cancelled."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+            404: OpenApiResponse(description="Transfer not found."),
+            409: OpenApiResponse(description="Transfer already completed or cancelled."),
+        },
+    )
+    def delete(self, request: Request, transfer_id: _UUID) -> Response:
+        """Cancel the transfer and return an empty success response."""
+        _CANCEL_TRANSFER_UC(
+            transfer_repo=_TRANSFER_REPO(),
+        ).execute(
+            transfer_id=transfer_id,
+            user_id=_UUID(str(request.user.id)),
+        )
+        return success_response({}, request=request)

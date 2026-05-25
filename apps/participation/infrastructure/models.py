@@ -9,6 +9,7 @@ from django.db import models
 from apps.participation.domain.entities import (
     CheckInEntity,
     RegistrationEntity,
+    TicketTransferEntity,
     VolunteerShiftEntity,
     WaitlistEntryEntity,
 )
@@ -327,3 +328,53 @@ class EventParticipationContext(models.Model):
     user_id = models.UUIDField(db_index=True)
     participation_type = models.CharField(max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TicketTransfer(models.Model):
+    """A pending or completed transfer of ticket ownership between two users."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+        EXPIRED = "expired", "Expired"
+
+    class Meta:
+        db_table = '"participation"."ticket_transfer"'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    registration = models.ForeignKey(
+        Registration, on_delete=models.CASCADE, related_name="transfers"
+    )
+    from_user_id = models.UUIDField(db_index=True)
+    to_email = models.EmailField()
+    token = models.UUIDField(unique=True, default=uuid.uuid4)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    def to_entity(self) -> TicketTransferEntity:
+        """Map this ORM row to a pure-Python TicketTransferEntity."""
+        return TicketTransferEntity(
+            id=self.id,
+            registration_id=self.registration_id,
+            from_user_id=self.from_user_id,
+            to_email=self.to_email,
+            token=self.token,
+            status=self.status,
+            created_at=self.created_at,
+            expires_at=self.expires_at,
+        )
+
+    @classmethod
+    def from_entity(cls, entity: TicketTransferEntity) -> "TicketTransfer":
+        """Build an unsaved ORM instance from a TicketTransferEntity."""
+        return cls(
+            id=entity.id,
+            registration_id=entity.registration_id,
+            from_user_id=entity.from_user_id,
+            to_email=entity.to_email,
+            token=entity.token,
+            status=entity.status,
+            expires_at=entity.expires_at,
+        )

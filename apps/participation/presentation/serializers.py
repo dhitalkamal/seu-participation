@@ -94,3 +94,22 @@ class CheckInStatsResponseSerializer(serializers.Serializer):
     total = serializers.IntegerField()
     checked_in = serializers.IntegerField()
     remaining = serializers.IntegerField()
+
+
+class InitiateTransferSerializer(serializers.Serializer):
+    """Payload for initiating a ticket transfer."""
+
+    to_email = serializers.EmailField()
+
+
+class TicketTransferResponseSerializer(serializers.Serializer):
+    """Public shape of a ticket transfer resource."""
+
+    id = serializers.UUIDField()
+    registration_id = serializers.UUIDField()
+    from_user_id = serializers.UUIDField()
+    to_email = serializers.EmailField()
+    token = serializers.UUIDField()
+    status = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    expires_at = serializers.DateTimeField()

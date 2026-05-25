@@ -8,6 +8,7 @@ from datetime import datetime
 from apps.participation.domain.entities import (
     CheckInEntity,
     RegistrationEntity,
+    TicketTransferEntity,
     WaitlistEntryEntity,
 )
 from apps.participation.domain.exceptions import RegistrationNotFoundError
@@ -15,12 +16,14 @@ from apps.participation.domain.repositories import (
     ICheckInRepository,
     IParticipationContextRepository,
     IRegistrationRepository,
+    ITicketTransferRepository,
     IWaitlistRepository,
 )
 from apps.participation.infrastructure.models import (
     CheckIn,
     EventParticipationContext,
     Registration,
+    TicketTransfer,
     WaitlistEntry,
 )
 
@@ -203,3 +206,43 @@ class DjangoParticipationContextRepository(IParticipationContextRepository):
     def delete_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> None:
         """Remove the participation context row for this (event, user) pair."""
         EventParticipationContext.objects.filter(event_id=event_id, user_id=user_id).delete()
+
+
+class DjangoTicketTransferRepository(ITicketTransferRepository):
+    """Persists TicketTransfer entities using the Django ORM."""
+
+    def create(self, entity: TicketTransferEntity) -> TicketTransferEntity:
+        """Persist a new transfer and return the saved entity."""
+        obj = TicketTransfer.from_entity(entity)
+        obj.save(using="default")
+        return obj.to_entity()
+
+    def get_by_token(self, token: uuid.UUID) -> TicketTransferEntity | None:
+        """Return the transfer matching the token or None if not found."""
+        try:
+            return TicketTransfer.objects.get(token=token).to_entity()
+        except TicketTransfer.DoesNotExist:
+            return None
+
+    def get_by_id(self, transfer_id: uuid.UUID) -> TicketTransferEntity | None:
+        """Return the transfer by primary key or None if not found."""
+        try:
+            return TicketTransfer.objects.get(id=transfer_id).to_entity()
+        except TicketTransfer.DoesNotExist:
+            return None
+
+    def get_pending_for_registration(
+        self, registration_id: uuid.UUID
+    ) -> TicketTransferEntity | None:
+        """Return the pending transfer for this registration or None."""
+        obj = TicketTransfer.objects.filter(
+            registration_id=registration_id, status="pending"
+        ).first()
+        return obj.to_entity() if obj else None
+
+    def update(self, entity: TicketTransferEntity) -> TicketTransferEntity:
+        """Fetch the existing row, update mutable fields, and save."""
+        obj = TicketTransfer.objects.get(id=entity.id)
+        obj.status = entity.status
+        obj.save()
+        return obj.to_entity()

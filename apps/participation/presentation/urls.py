@@ -5,11 +5,14 @@ from __future__ import annotations
 from django.urls import URLPattern, path
 
 from .views import (
+    AcceptTransferView,
     BatchCheckInView,
     CancelRegistrationView,
+    CancelTransferView,
     CheckInView,
     EventCheckInStatsView,
     HealthCheckView,
+    InitiateTransferView,
     InternalParticipationContextView,
     MyShiftsView,
     PassportView,
@@ -51,5 +54,20 @@ urlpatterns: list[URLPattern] = [
         "internal/participation-context/<uuid:event_id>/<uuid:user_id>/",
         InternalParticipationContextView.as_view(),
         name="internal-participation-context",
+    ),
+    path(
+        "registrations/<uuid:registration_id>/transfer/",
+        InitiateTransferView.as_view(),
+        name="registration-initiate-transfer",
+    ),
+    path(
+        "transfers/<uuid:token>/accept/",
+        AcceptTransferView.as_view(),
+        name="transfer-accept",
+    ),
+    path(
+        "transfers/<uuid:transfer_id>/",
+        CancelTransferView.as_view(),
+        name="transfer-cancel",
     ),
 ]
