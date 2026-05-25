@@ -11,6 +11,7 @@ class RegisterSerializer(serializers.Serializer):
     event_id = serializers.UUIDField()
     quantity = serializers.IntegerField(min_value=1, default=1)
     notes = serializers.CharField(max_length=500, required=False, allow_null=True)
+    networking_opt_in = serializers.BooleanField(default=False, required=False)
 
 
 class CancelSerializer(serializers.Serializer):
@@ -38,6 +39,7 @@ class RegistrationResponseSerializer(serializers.Serializer):
     notes = serializers.CharField(allow_null=True)
     checked_in_at = serializers.DateTimeField(allow_null=True)
     cancelled_at = serializers.DateTimeField(allow_null=True)
+    networking_opt_in = serializers.BooleanField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
 
@@ -49,6 +51,8 @@ class WaitlistResponseSerializer(serializers.Serializer):
     event_id = serializers.UUIDField()
     user_id = serializers.UUIDField()
     position = serializers.IntegerField()
+    status = serializers.CharField()
+    offered_at = serializers.DateTimeField(allow_null=True)
     expires_at = serializers.DateTimeField(allow_null=True)
     created_at = serializers.DateTimeField()
     waitlisted = serializers.SerializerMethodField()
@@ -90,3 +94,22 @@ class CheckInStatsResponseSerializer(serializers.Serializer):
     total = serializers.IntegerField()
     checked_in = serializers.IntegerField()
     remaining = serializers.IntegerField()
+
+
+class InitiateTransferSerializer(serializers.Serializer):
+    """Payload for initiating a ticket transfer."""
+
+    to_email = serializers.EmailField()
+
+
+class TicketTransferResponseSerializer(serializers.Serializer):
+    """Public shape of a ticket transfer resource."""
+
+    id = serializers.UUIDField()
+    registration_id = serializers.UUIDField()
+    from_user_id = serializers.UUIDField()
+    to_email = serializers.EmailField()
+    token = serializers.UUIDField()
+    status = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    expires_at = serializers.DateTimeField()

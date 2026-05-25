@@ -8,10 +8,15 @@ import pytest
 
 from apps.participation.application.use_cases.register import RegisterForEventUseCase
 from apps.participation.domain.entities import RegistrationEntity, WaitlistEntryEntity
-from apps.participation.domain.exceptions import AlreadyRegisteredError, EventNotFoundError
+from apps.participation.domain.exceptions import (
+    AlreadyRegisteredError,
+    EventNotFoundError,
+    ParticipationConflictError,
+)
 from apps.participation.tests.unit.fakes import (
     FakeEventClient,
     FakeEventPublisher,
+    FakeParticipationContextRepository,
     FakeRegistrationRepository,
     FakeWaitlistRepository,
     make_event_summary,
@@ -19,12 +24,15 @@ from apps.participation.tests.unit.fakes import (
 )
 
 
-def _uc(event=None, regs=None, waitlist=None, publisher=None) -> RegisterForEventUseCase:
+def _uc(
+    event=None, regs=None, waitlist=None, publisher=None, context_repo=None
+) -> RegisterForEventUseCase:
     return RegisterForEventUseCase(
         reg_repo=FakeRegistrationRepository(regs or []),
         waitlist_repo=FakeWaitlistRepository(waitlist or []),
         event_client=FakeEventClient(event),
         publisher=publisher or FakeEventPublisher(),
+        context_repo=context_repo,
     )
 
 
@@ -102,7 +110,9 @@ def test_register_waitlist_does_not_publish_registration_created():
         publisher=publisher,
     ).execute(event_id=event.event_id, user_id=uuid.uuid4())
     assert isinstance(result, WaitlistEntryEntity)
-    assert publisher.events == []
+    assert not any(
+        e["routing_key"] == "participation.registration.created" for e in publisher.events
+    )
 
 
 def test_register_at_capacity_adds_to_waitlist():
@@ -115,3 +125,25 @@ def test_register_at_capacity_adds_to_waitlist():
     assert result.event_id == event_id
     assert result.user_id == user_id
     assert result.position == 1
+
+
+def test_register_blocked_when_volunteer_context_exists():
+    """Registering as attendee is blocked when user is already a volunteer for the event."""
+    event_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    event = make_event_summary(event_id=event_id, capacity=100, registered_count=0)
+    context_repo = FakeParticipationContextRepository()
+    context_repo.set_context(event_id, user_id, "volunteer")
+    with pytest.raises(ParticipationConflictError):
+        _uc(event=event, context_repo=context_repo).execute(event_id=event_id, user_id=user_id)
+
+
+def test_register_sets_attendee_context_on_success():
+    """Successful registration records attendee context for the (event, user) pair."""
+    event_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    event = make_event_summary(event_id=event_id, capacity=100, registered_count=0)
+    context_repo = FakeParticipationContextRepository()
+    result = _uc(event=event, context_repo=context_repo).execute(event_id=event_id, user_id=user_id)
+    assert isinstance(result, RegistrationEntity)
+    assert context_repo.get_context(event_id, user_id) == "attendee"

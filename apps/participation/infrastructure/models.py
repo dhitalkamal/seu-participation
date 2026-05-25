@@ -9,6 +9,7 @@ from django.db import models
 from apps.participation.domain.entities import (
     CheckInEntity,
     RegistrationEntity,
+    TicketTransferEntity,
     VolunteerShiftEntity,
     WaitlistEntryEntity,
 )
@@ -44,6 +45,7 @@ class Registration(models.Model):
     notes = models.TextField(null=True, blank=True)
     checked_in_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    networking_opt_in = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -61,6 +63,7 @@ class Registration(models.Model):
             checked_in_at=self.checked_in_at,
             cancelled_at=self.cancelled_at,
             notes=self.notes,
+            networking_opt_in=self.networking_opt_in,
         )
 
     @classmethod
@@ -76,6 +79,7 @@ class Registration(models.Model):
             checked_in_at=entity.checked_in_at,
             cancelled_at=entity.cancelled_at,
             notes=entity.notes,
+            networking_opt_in=entity.networking_opt_in,
         )
 
 
@@ -124,6 +128,11 @@ class CheckIn(models.Model):
 class WaitlistEntry(models.Model):
     """A queued position for a user waiting for a spot at a full event."""
 
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        OFFERED = "offered", "Offered"
+        EXPIRED = "expired", "Expired"
+
     class Meta:
         db_table = '"participation"."waitlist_entry"'
         constraints = [
@@ -137,6 +146,8 @@ class WaitlistEntry(models.Model):
     event_id = models.UUIDField()
     user_id = models.UUIDField()
     position = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    offered_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -148,6 +159,8 @@ class WaitlistEntry(models.Model):
             user_id=self.user_id,
             position=self.position,
             created_at=self.created_at,
+            status=self.status,
+            offered_at=self.offered_at,
             expires_at=self.expires_at,
         )
 
@@ -159,6 +172,8 @@ class WaitlistEntry(models.Model):
             event_id=entity.event_id,
             user_id=entity.user_id,
             position=entity.position,
+            status=entity.status,
+            offered_at=entity.offered_at,
             expires_at=entity.expires_at,
         )
 
@@ -294,3 +309,72 @@ class RegistrationAnswer(models.Model):
     registration = models.ForeignKey(Registration, on_delete=models.CASCADE, related_name="answers")
     field = models.ForeignKey(CustomFormField, on_delete=models.CASCADE, related_name="answers")
     value = models.TextField()
+
+
+class EventParticipationContext(models.Model):
+    """Records whether a user is participating in an event as attendee or volunteer."""
+
+    class Meta:
+        db_table = '"participation"."event_participation_context"'
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event_id", "user_id"],
+                name="unique_event_participation_context",
+            )
+        ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_id = models.UUIDField(db_index=True)
+    user_id = models.UUIDField(db_index=True)
+    participation_type = models.CharField(max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TicketTransfer(models.Model):
+    """A pending or completed transfer of ticket ownership between two users."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+        EXPIRED = "expired", "Expired"
+
+    class Meta:
+        db_table = '"participation"."ticket_transfer"'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    registration = models.ForeignKey(
+        Registration, on_delete=models.CASCADE, related_name="transfers"
+    )
+    from_user_id = models.UUIDField(db_index=True)
+    to_email = models.EmailField()
+    token = models.UUIDField(unique=True, default=uuid.uuid4)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    def to_entity(self) -> TicketTransferEntity:
+        """Map this ORM row to a pure-Python TicketTransferEntity."""
+        return TicketTransferEntity(
+            id=self.id,
+            registration_id=self.registration_id,
+            from_user_id=self.from_user_id,
+            to_email=self.to_email,
+            token=self.token,
+            status=self.status,
+            created_at=self.created_at,
+            expires_at=self.expires_at,
+        )
+
+    @classmethod
+    def from_entity(cls, entity: TicketTransferEntity) -> "TicketTransfer":
+        """Build an unsaved ORM instance from a TicketTransferEntity."""
+        return cls(
+            id=entity.id,
+            registration_id=entity.registration_id,
+            from_user_id=entity.from_user_id,
+            to_email=entity.to_email,
+            token=entity.token,
+            status=entity.status,
+            expires_at=entity.expires_at,
+        )

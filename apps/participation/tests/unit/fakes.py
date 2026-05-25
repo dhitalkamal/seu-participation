@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Sequence
 
 from apps.participation.domain.entities import (
     CheckInEntity,
     EventSummary,
     RegistrationEntity,
+    TicketTransferEntity,
     WaitlistEntryEntity,
 )
 from apps.participation.domain.exceptions import EventNotFoundError, RegistrationNotFoundError
@@ -17,9 +18,28 @@ from apps.participation.domain.repositories import (
     ICheckInRepository,
     IEventClient,
     IEventPublisher,
+    IParticipationContextRepository,
     IRegistrationRepository,
+    ITicketTransferRepository,
     IWaitlistRepository,
 )
+
+
+def make_waitlist_entry(**kwargs: object) -> WaitlistEntryEntity:
+    """Build a WaitlistEntryEntity with sensible defaults for testing."""
+    now = datetime.now(timezone.utc)
+    defaults: dict = {
+        "id": uuid.uuid4(),
+        "event_id": uuid.uuid4(),
+        "user_id": uuid.uuid4(),
+        "position": 1,
+        "created_at": now,
+        "status": "pending",
+        "offered_at": None,
+        "expires_at": None,
+    }
+    defaults.update(kwargs)
+    return WaitlistEntryEntity(**defaults)  # type: ignore[arg-type]
 
 
 def _now() -> datetime:
@@ -137,14 +157,25 @@ class FakeWaitlistRepository(IWaitlistRepository):
         self._store[entity.id] = entity
         return entity
 
+    def get_by_id(self, entry_id: uuid.UUID) -> WaitlistEntryEntity | None:
+        """Return the entry or None if absent."""
+        return self._store.get(entry_id)
+
     def has_entry(self, event_id: uuid.UUID, user_id: uuid.UUID) -> bool:
         """True if the user is already in the waitlist for this event."""
         return any(e.event_id == event_id and e.user_id == user_id for e in self._store.values())
 
-    def next_in_queue(self, event_id: uuid.UUID) -> WaitlistEntryEntity | None:
-        """Return the entry with the lowest position for this event."""
-        entries = [e for e in self._store.values() if e.event_id == event_id]
+    def next_pending_in_queue(self, event_id: uuid.UUID) -> WaitlistEntryEntity | None:
+        """Return the pending entry with the lowest position for this event."""
+        entries = [
+            e for e in self._store.values() if e.event_id == event_id and e.status == "pending"
+        ]
         return min(entries, key=lambda e: e.position) if entries else None
+
+    def update(self, entity: WaitlistEntryEntity) -> WaitlistEntryEntity:
+        """Overwrite the stored entry and return it."""
+        self._store[entity.id] = entity
+        return entity
 
     def remove(self, entry_id: uuid.UUID) -> None:
         """Delete the entry by id."""
@@ -153,6 +184,14 @@ class FakeWaitlistRepository(IWaitlistRepository):
     def count_for_event(self, event_id: uuid.UUID) -> int:
         """Count all waitlist entries for this event."""
         return sum(1 for e in self._store.values() if e.event_id == event_id)
+
+    def list_offered_before(self, cutoff: datetime) -> list[WaitlistEntryEntity]:
+        """Return all offered entries whose expires_at is at or before the cutoff."""
+        return [
+            e
+            for e in self._store.values()
+            if e.status == "offered" and e.expires_at is not None and e.expires_at <= cutoff
+        ]
 
 
 class FakeEventClient(IEventClient):
@@ -177,3 +216,81 @@ class FakeEventPublisher(IEventPublisher):
     def publish(self, *, routing_key: str, payload: dict) -> None:
         """Record the published event."""
         self.events.append({"routing_key": routing_key, "payload": payload})
+
+
+class FakeParticipationContextRepository(IParticipationContextRepository):
+    """In-memory participation context store keyed by (event_id, user_id)."""
+
+    def __init__(self) -> None:
+        self._store: dict[tuple[uuid.UUID, uuid.UUID], str] = {}
+
+    def has_context(self, event_id: uuid.UUID, user_id: uuid.UUID, participation_type: str) -> bool:
+        """True if the stored context matches the given type."""
+        return self._store.get((event_id, user_id)) == participation_type
+
+    def get_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> str | None:
+        """Return the stored participation type or None if no context exists."""
+        return self._store.get((event_id, user_id))
+
+    def set_context(self, event_id: uuid.UUID, user_id: uuid.UUID, participation_type: str) -> None:
+        """Persist the participation type for this (event, user) pair."""
+        self._store[(event_id, user_id)] = participation_type
+
+    def delete_context(self, event_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        """Remove the context entry for this (event, user) pair."""
+        self._store.pop((event_id, user_id), None)
+
+
+def make_transfer(**kwargs: object) -> TicketTransferEntity:
+    """Build a TicketTransferEntity with sensible defaults for testing."""
+    now = datetime.now(timezone.utc)
+    defaults: dict = {
+        "id": uuid.uuid4(),
+        "registration_id": uuid.uuid4(),
+        "from_user_id": uuid.uuid4(),
+        "to_email": "recipient@example.com",
+        "token": uuid.uuid4(),
+        "status": "pending",
+        "created_at": now,
+        "expires_at": now + timedelta(hours=48),
+    }
+    defaults.update(kwargs)
+    return TicketTransferEntity(**defaults)  # type: ignore[arg-type]
+
+
+class FakeTicketTransferRepository(ITicketTransferRepository):
+    """In-memory ticket transfer store."""
+
+    def __init__(self, transfers: Sequence[TicketTransferEntity] | None = None) -> None:
+        self._store: dict[uuid.UUID, TicketTransferEntity] = {t.id: t for t in (transfers or [])}
+
+    def create(self, entity: TicketTransferEntity) -> TicketTransferEntity:
+        """Persist and return the entity."""
+        self._store[entity.id] = entity
+        return entity
+
+    def get_by_token(self, token: uuid.UUID) -> TicketTransferEntity | None:
+        """Return the transfer matching the token or None."""
+        return next((t for t in self._store.values() if t.token == token), None)
+
+    def get_by_id(self, transfer_id: uuid.UUID) -> TicketTransferEntity | None:
+        """Return the transfer by id or None."""
+        return self._store.get(transfer_id)
+
+    def get_pending_for_registration(
+        self, registration_id: uuid.UUID
+    ) -> TicketTransferEntity | None:
+        """Return the pending transfer for this registration or None."""
+        return next(
+            (
+                t
+                for t in self._store.values()
+                if t.registration_id == registration_id and t.status == "pending"
+            ),
+            None,
+        )
+
+    def update(self, entity: TicketTransferEntity) -> TicketTransferEntity:
+        """Overwrite the stored entity and return it."""
+        self._store[entity.id] = entity
+        return entity

@@ -45,3 +45,59 @@ class InvalidQRTokenError(DomainError):
 
     http_status = 422
     code = "ERR_QR_TOKEN_INVALID"
+
+
+class WaitlistOfferNotFoundError(DomainError):
+    """No waitlist offer matches the given identifier or belongs to the user."""
+
+    http_status = 404
+    code = "ERR_WAITLIST_OFFER_NOT_FOUND"
+
+
+class WaitlistOfferExpiredError(DomainError):
+    """The 24-hour acceptance window for this waitlist offer has passed."""
+
+    http_status = 422
+    code = "ERR_WAITLIST_OFFER_EXPIRED"
+
+
+class WaitlistOfferAlreadyRespondedError(DomainError):
+    """The offer was already accepted or declined."""
+
+    http_status = 409
+    code = "ERR_WAITLIST_OFFER_ALREADY_RESPONDED"
+
+
+class ParticipationConflictError(DomainError):
+    """User is already participating in this event in a different capacity."""
+
+    http_status = 409
+    code = "ERR_PARTICIPATION_CONFLICT"
+
+
+class TransferNotFoundError(DomainError):
+    """No transfer matches the given identifier or does not belong to the user."""
+
+    http_status = 404
+    code = "ERR_TRANSFER_NOT_FOUND"
+
+
+class TransferExpiredError(DomainError):
+    """The 48-hour acceptance window for this transfer has passed."""
+
+    http_status = 422
+    code = "ERR_TRANSFER_EXPIRED"
+
+
+class TransferAlreadyRespondedError(DomainError):
+    """The transfer was already accepted or cancelled."""
+
+    http_status = 409
+    code = "ERR_TRANSFER_ALREADY_RESPONDED"
+
+
+class CannotTransferError(DomainError):
+    """The registration is not in a state that allows transfer."""
+
+    http_status = 409
+    code = "ERR_TRANSFER_NOT_ALLOWED"
