@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
                 ("notes", models.TextField(blank=True, null=True)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
-            options={"db_table": '"participation"."volunteer_shift"'},
+            options={"db_table": "participation_volunteer_shift"},
         ),
         migrations.AddConstraint(
             model_name="volunteershift",

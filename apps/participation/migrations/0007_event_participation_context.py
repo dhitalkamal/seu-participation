@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                "db_table": '"participation"."event_participation_context"',
+                "db_table": "participation_event_participation_context",
             },
         ),
         migrations.AddConstraint(

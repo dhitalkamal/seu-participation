@@ -32,7 +32,7 @@ class Migration(migrations.Migration):
                 ("saved_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                "db_table": '"participation"."saved_event"',
+                "db_table": "participation_saved_event",
                 "ordering": ["-saved_at"],
             },
         ),

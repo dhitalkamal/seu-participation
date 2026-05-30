@@ -40,7 +40,7 @@ class Migration(migrations.Migration):
                 ("is_active", models.BooleanField(default=True)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
-            options={"db_table": '"participation"."ticket_tier"'},
+            options={"db_table": "participation_ticket_tier"},
         ),
         migrations.CreateModel(
             name="CustomFormField",
@@ -67,7 +67,7 @@ class Migration(migrations.Migration):
                 ("position", models.PositiveSmallIntegerField(default=0)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
-            options={"db_table": '"participation"."custom_form_field"', "ordering": ["position"]},
+            options={"db_table": "participation_custom_form_field", "ordering": ["position"]},
         ),
         migrations.CreateModel(
             name="RegistrationAnswer",
@@ -91,7 +91,7 @@ class Migration(migrations.Migration):
                 ),
                 ("value", models.TextField()),
             ],
-            options={"db_table": '"participation"."registration_answer"'},
+            options={"db_table": "participation_registration_answer"},
         ),
         migrations.AddConstraint(
             model_name="registrationanswer",

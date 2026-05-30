@@ -15,7 +15,7 @@ class SavedEvent(models.Model):
     """
 
     class Meta:
-        db_table = '"participation"."saved_event"'
+        db_table = "participation_saved_event"
         constraints = [
             models.UniqueConstraint(
                 fields=["user_id", "event_id"],

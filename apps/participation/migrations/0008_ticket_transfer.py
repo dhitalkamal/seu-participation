@@ -49,7 +49,7 @@ class Migration(migrations.Migration):
                 ),
             ],
             options={
-                "db_table": '"participation"."ticket_transfer"',
+                "db_table": "participation_ticket_transfer",
             },
         ),
     ]

@@ -27,7 +27,7 @@ class Registration(models.Model):
         NO_SHOW = "no_show", "No Show"
 
     class Meta:
-        db_table = '"participation"."registration"'
+        db_table = "participation_registration"
         constraints = [
             models.UniqueConstraint(
                 fields=["event_id", "user_id"],
@@ -91,7 +91,7 @@ class CheckIn(models.Model):
         MANUAL = "manual", "Manual"
 
     class Meta:
-        db_table = '"participation"."check_in"'
+        db_table = "participation_check_in"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     registration = models.OneToOneField(
@@ -134,7 +134,7 @@ class WaitlistEntry(models.Model):
         EXPIRED = "expired", "Expired"
 
     class Meta:
-        db_table = '"participation"."waitlist_entry"'
+        db_table = "participation_waitlist_entry"
         constraints = [
             models.UniqueConstraint(
                 fields=["event_id", "user_id"],
@@ -195,7 +195,7 @@ class VolunteerShift(models.Model):
         CANCELLED = "cancelled", "Cancelled"
 
     class Meta:
-        db_table = '"participation"."volunteer_shift"'
+        db_table = "participation_volunteer_shift"
         constraints = [
             models.UniqueConstraint(
                 fields=["event_id", "user_id"],
@@ -245,7 +245,7 @@ class TicketTier(models.Model):
         COMP = "comp", "Complimentary"
 
     class Meta:
-        db_table = '"participation"."ticket_tier"'
+        db_table = "participation_ticket_tier"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event_id = models.UUIDField(db_index=True)
@@ -287,7 +287,7 @@ class CustomFormField(models.Model):
         RADIO = "radio", "Radio buttons"
 
     class Meta:
-        db_table = '"participation"."custom_form_field"'
+        db_table = "participation_custom_form_field"
         ordering = ["position"]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -304,7 +304,7 @@ class RegistrationAnswer(models.Model):
     """An attendee answer to a custom form field."""
 
     class Meta:
-        db_table = '"participation"."registration_answer"'
+        db_table = "participation_registration_answer"
         constraints = [
             models.UniqueConstraint(
                 fields=["registration", "field"],
@@ -322,7 +322,7 @@ class EventParticipationContext(models.Model):
     """Records whether a user is participating in an event as attendee or volunteer."""
 
     class Meta:
-        db_table = '"participation"."event_participation_context"'
+        db_table = "participation_event_participation_context"
         constraints = [
             models.UniqueConstraint(
                 fields=["event_id", "user_id"],
@@ -347,7 +347,7 @@ class TicketTransfer(models.Model):
         EXPIRED = "expired", "Expired"
 
     class Meta:
-        db_table = '"participation"."ticket_transfer"'
+        db_table = "participation_ticket_transfer"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     registration = models.ForeignKey(

@@ -103,11 +103,7 @@ class StubGoogleWalletPassGenerator(IWalletPassGenerator):
                                 "classId": f"{issuer_id}.sansaar_event_ticket",
                                 "genericType": "GENERIC_TYPE_UNSPECIFIED",
                                 "hexBackgroundColor": "#050A26",
-                                "logo": {
-                                    "sourceUri": {
-                                        "uri": "https://sansaarhr.com/logo.png"
-                                    }
-                                },
+                                "logo": {"sourceUri": {"uri": "https://sansaarhr.com/logo.png"}},
                                 "cardTitle": {
                                     "defaultValue": {
                                         "language": "en-US",

@@ -21,7 +21,7 @@ class TestSavedEventModel:
 
     def test_saved_event_meta_table_name(self) -> None:
         """SavedEvent must use the participation schema."""
-        assert SavedEvent._meta.db_table == '"participation"."saved_event"'
+        assert SavedEvent._meta.db_table == "participation_saved_event"
 
     def test_saved_event_unique_together(self) -> None:
         """SavedEvent must enforce unique (user_id, event_id) constraint."""
