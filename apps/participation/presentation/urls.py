@@ -22,6 +22,8 @@ from .views import (
     SavedEventDeleteView,
     SavedEventListCreateView,
     TicketPdfView,
+    TicketTierDetailView,
+    TicketTierListCreateView,
     WaitlistAcceptView,
     WaitlistDeclineView,
     WalletPassView,
@@ -89,5 +91,15 @@ urlpatterns: list[URLPattern] = [
         "registrations/<uuid:registration_id>/wallet/<str:pass_type>/",
         WalletPassView.as_view(),
         name="registration-wallet-pass",
+    ),
+    path(
+        "events/<uuid:event_id>/ticket-tiers/",
+        TicketTierListCreateView.as_view(),
+        name="ticket-tier-list-create",
+    ),
+    path(
+        "events/<uuid:event_id>/ticket-tiers/<uuid:tier_id>/",
+        TicketTierDetailView.as_view(),
+        name="ticket-tier-detail",
     ),
 ]
