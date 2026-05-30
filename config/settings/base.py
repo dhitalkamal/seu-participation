@@ -112,6 +112,7 @@ CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
 REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
 RABBITMQ_URL = config("RABBITMQ_URL", default="amqp://guest:guest@localhost:5672/")
 EVENT_SERVICE_URL = config("EVENT_SERVICE_URL", default="http://event:8002")
+MANAGEMENT_SERVICE_URL = config("MANAGEMENT_SERVICE_URL", default="http://management:8006")
 
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL

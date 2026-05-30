@@ -30,10 +30,12 @@ class HttpEventClient(IEventClient):
         try:
             with urllib.request.urlopen(url, timeout=5) as response:
                 data = json.loads(response.read())["data"]
+                org_id_raw = data.get("organization_id")
                 return EventSummary(
                     event_id=uuid.UUID(data["id"]),
                     capacity=data["capacity"],
                     registered_count=data["registered_count"],
+                    organization_id=uuid.UUID(org_id_raw) if org_id_raw else None,
                     overbooking_percent=data.get("overbooking_percent", 0),
                 )
         except urllib.error.HTTPError as exc:

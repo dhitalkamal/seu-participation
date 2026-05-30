@@ -33,10 +33,12 @@ from apps.participation.application.use_cases.list_my_registrations import (
 )
 from apps.participation.application.use_cases.list_my_shifts import ListMyShiftsUseCase
 from apps.participation.application.use_cases.register import RegisterForEventUseCase
+from apps.participation.infrastructure.plan_client import HttpPlanClient
 from apps.participation.application.use_cases.validate_qr_token import ValidateQRTokenUseCase
 from apps.participation.application.use_cases.verify_passport import VerifyPassportUseCase
 from apps.participation.domain.entities import WaitlistEntryEntity
 from apps.participation.domain.exceptions import InvalidQRTokenError
+from apps.participation.infrastructure.audit_publisher import publish_audit
 from apps.participation.infrastructure.event_client import HttpEventClient
 from apps.participation.infrastructure.models import CustomFormField, TicketTier
 from apps.participation.infrastructure.publisher import RabbitMQEventPublisher
@@ -269,6 +271,7 @@ class RegisterView(APIView):
             event_client=_EVENT_CLIENT(settings.EVENT_SERVICE_URL),
             publisher=_PUBLISHER(),
             context_repo=_CONTEXT_REPO(),
+            plan_client=HttpPlanClient(settings.MANAGEMENT_SERVICE_URL),
         ).execute(
             event_id=d["event_id"],
             user_id=uuid.UUID(str(request.user.id)),
@@ -279,6 +282,12 @@ class RegisterView(APIView):
             networking_opt_in=d.get("networking_opt_in", False),
         )
 
+        publish_audit(
+            request=request,
+            user_id=uuid.UUID(str(request.user.id)),
+            event_type="registration.created",
+            metadata={"event_id": str(d["event_id"])},
+        )
         if isinstance(result, _WAITLIST_ENTITY):
             return _CREATED(_WAITLIST_RESP_SER(result).data, request=request)
         return _CREATED(_REG_RESP_SER(result).data, request=request)
@@ -317,6 +326,12 @@ class CancelRegistrationView(APIView):
             registration_id=d["registration_id"],
             user_id=uuid.UUID(str(request.user.id)),
             email=request.user.token.get("email", ""),
+        )
+        publish_audit(
+            request=request,
+            user_id=uuid.UUID(str(request.user.id)),
+            event_type="registration.cancelled",
+            metadata={"registration_id": str(d["registration_id"])},
         )
         return success_response(_REG_RESP_SER(result).data, request=request)
 
@@ -379,6 +394,12 @@ class CheckInView(APIView):
             method=d["method"],
             staff_user_id=uuid.UUID(str(request.user.id)),
         )
+        publish_audit(
+            request=request,
+            user_id=uuid.UUID(str(request.user.id)),
+            event_type="checkin.completed",
+            metadata={"registration_code": registration_code},
+        )
         return success_response(_CHECKIN_RESP_SER(result).data, request=request)
 
 
@@ -432,7 +453,7 @@ class MyShiftsView(APIView):
 class EventCheckInStatsView(APIView):
     """Return live check-in stats for a specific event (volunteer dashboard)."""
 
-    # org_id is read from query_params["organisation_id"] by IsOrgMember
+    # org_id is read from query_params["organization_id"] by IsOrgMember
     permission_classes = [IsAuthenticated, IsOrgMember]
 
     @extend_schema(
@@ -490,7 +511,7 @@ class QRTokenView(APIView):
 class BatchCheckInView(APIView):
     """POST /check-in/batch/ - sync offline QR check-ins after connectivity restored."""
 
-    # org_id is read from request.data["organisation_id"] by IsOrgManager
+    # org_id is read from request.data["organization_id"] by IsOrgManager
     permission_classes = [IsAuthenticated, IsOrgManager]
 
     @extend_schema(
@@ -528,6 +549,12 @@ class BatchCheckInView(APIView):
             event_id=event_id,
             tokens=tokens,
             staff_user_id=uuid.UUID(str(request.user.id)),
+        )
+        publish_audit(
+            request=request,
+            user_id=uuid.UUID(str(request.user.id)),
+            event_type="checkin.completed",
+            metadata={"batch": True, "count": len(tokens)},
         )
         return success_response(result, request=request)
 
@@ -578,7 +605,7 @@ class PassportView(APIView):
 
 
 class TicketTierListCreateView(APIView):
-    """List tiers for an event or create a new one (organiser only)."""
+    """List tiers for an event or create a new one (organizer only)."""
 
     def get_permissions(self) -> list:
         """GET is public; POST requires authentication."""
@@ -768,6 +795,12 @@ class WaitlistAcceptView(APIView):
             reg_repo=DjangoRegistrationRepository(),
             publisher=RabbitMQEventPublisher(),
         ).execute(entry_id=entry_id, user_id=user_id)
+        publish_audit(
+            request=request,
+            user_id=uuid.UUID(str(request.user.id)),
+            event_type="registration.created",
+            metadata={"source": "waitlist_promotion"},
+        )
         ser = RegistrationResponseSerializer(registration)
         return success_response(ser.data, request=request)
 
@@ -877,6 +910,12 @@ class InitiateTransferView(APIView):
             from_user_id=_UUID(str(request.user.id)),
             to_email=ser.validated_data["to_email"],
         )
+        publish_audit(
+            request=request,
+            user_id=uuid.UUID(str(request.user.id)),
+            event_type="transfer.initiated",
+            metadata={"to_email": ser.validated_data["to_email"]},
+        )
         return _CREATED(_TRANSFER_RESP_SER(result).data, request=request)
 
 
@@ -911,6 +950,15 @@ class AcceptTransferView(APIView):
         ).execute(
             token=token,
             recipient_user_id=_UUID(str(request.user.id)),
+        )
+        publish_audit(
+            request=request,
+            user_id=uuid.UUID(str(request.user.id)),
+            event_type="transfer.accepted",
+            metadata={
+                "transfer_token": str(token),
+                "registration_id": str(result.id),
+            },
         )
         return _CREATED(_REG_RESP_SER(result).data, request=request)
 

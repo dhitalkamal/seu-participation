@@ -10,7 +10,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from apps.participation.domain.entities import RegistrationEntity, WaitlistEntryEntity
-from apps.participation.domain.exceptions import AlreadyRegisteredError, ParticipationConflictError
+from apps.participation.domain.exceptions import (
+    AlreadyRegisteredError,
+    ParticipationConflictError,
+    PlanLimitExceededError,
+)
 from apps.participation.domain.repositories import (
     IEventClient,
     IEventPublisher,
@@ -18,6 +22,7 @@ from apps.participation.domain.repositories import (
     IRegistrationRepository,
     IWaitlistRepository,
 )
+from apps.participation.infrastructure.plan_client import HttpPlanClient
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +74,7 @@ class RegisterForEventUseCase:
         publisher: IEventPublisher | None = None,
         context_repo: IParticipationContextRepository | None = None,
         redis_client: Any | None = None,
+        plan_client: HttpPlanClient | None = None,
     ) -> None:
         self._regs = reg_repo
         self._waitlist = waitlist_repo
@@ -76,6 +82,7 @@ class RegisterForEventUseCase:
         self._publisher = publisher
         self._context = context_repo
         self._redis = redis_client
+        self._plan_client = plan_client
 
     def execute(
         self,
@@ -105,6 +112,17 @@ class RegisterForEventUseCase:
         @raises ParticipationConflictError if user is already a volunteer for this event
         """
         event = self._events.get_event(event_id)
+
+        # plan-based registration cap enforcement
+        if self._plan_client is not None and event.organization_id is not None:
+            org_plan = self._plan_client.get_org_plan(event.organization_id)
+            cap = org_plan.registration_cap
+            if cap is not None and event.registered_count >= cap:
+                raise PlanLimitExceededError(
+                    f"This event has reached the {cap}-registration limit "
+                    f"for the organizer's {org_plan.plan} plan. "
+                    f"The organizer needs to upgrade their subscription."
+                )
 
         # ! XOR constraint - a user cannot be both attendee and volunteer for the same event
         if self._context is not None and self._context.has_context(event_id, user_id, "volunteer"):

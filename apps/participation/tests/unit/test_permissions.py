@@ -33,7 +33,7 @@ def test_org_manager_can_batch_checkin() -> None:
     org_id = "org-abc"
     request = _make_request(
         org_roles={org_id: "manager"},
-        data={"organisation_id": org_id},
+        data={"organization_id": org_id},
     )
     view = _make_view()
 
@@ -48,7 +48,7 @@ def test_non_member_denied_stats() -> None:
     org_id = "org-xyz"
     request = _make_request(
         org_roles={},
-        query_params={"organisation_id": org_id},
+        query_params={"organization_id": org_id},
     )
     view = _make_view()
 

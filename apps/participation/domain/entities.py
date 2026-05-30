@@ -179,6 +179,7 @@ class EventSummary:
     event_id: uuid.UUID
     capacity: int
     registered_count: int
+    organization_id: uuid.UUID | None = None
     # percentage by which the event allows registrations beyond stated capacity
     overbooking_percent: int = 0
 

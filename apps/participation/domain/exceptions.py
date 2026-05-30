@@ -101,3 +101,10 @@ class CannotTransferError(DomainError):
 
     http_status = 409
     code = "ERR_TRANSFER_NOT_ALLOWED"
+
+
+class PlanLimitExceededError(DomainError):
+    """The org's subscription plan does not allow more registrations for this event."""
+
+    http_status = 403
+    code = "ERR_PLAN_LIMIT_EXCEEDED"
