@@ -43,19 +43,23 @@ def _publish_registration_created(
         ch.basic_publish(
             exchange=_EXCHANGE,
             routing_key="participation.registration.created",
-            body=json.dumps({
-                "user_id": str(user_id),
-                "event_id": str(event_id),
-                "registration_id": str(registration_id),
-                "registration_code": registration_code,
-                "email": email,
-                "first_name": first_name,
-            }),
+            body=json.dumps(
+                {
+                    "user_id": str(user_id),
+                    "event_id": str(event_id),
+                    "registration_id": str(registration_id),
+                    "registration_code": registration_code,
+                    "email": email,
+                    "first_name": first_name,
+                }
+            ),
             properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
         )
         conn.close()
     except Exception:
         logger.exception("Failed to publish registration.created event")
+
+
 # routing keys this queue subscribes to
 _ROUTING_KEYS = ["payment.#", "volunteer.#"]
 
@@ -125,9 +129,13 @@ def _handle_order_completed(payload: dict) -> None:
             email=payload.get("email", ""),
             first_name=payload.get("first_name", ""),
         )
-        logger.info("Registration created for user %s on event %s after payment.", user_id, event_id)
+        logger.info(
+            "Registration created for user %s on event %s after payment.", user_id, event_id
+        )
     except Exception:
-        logger.exception("Failed to create registration for user %s on event %s.", user_id, event_id)
+        logger.exception(
+            "Failed to create registration for user %s on event %s.", user_id, event_id
+        )
 
 
 def _handle_volunteer_approved(payload: dict) -> None:

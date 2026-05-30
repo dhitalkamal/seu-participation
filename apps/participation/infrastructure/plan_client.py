@@ -7,7 +7,6 @@ import urllib.error
 import urllib.request
 import uuid
 
-
 # registration cap per plan - matches what's advertised on the pricing page
 PLAN_REGISTRATION_CAPS: dict[str, int | None] = {
     "free": 100,

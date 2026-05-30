@@ -19,6 +19,7 @@ dependencies = [
     "django-celery-beat>=2.6",
     "reportlab>=4.0",
     "qrcode>=8.0",
+    "dj-database-url>=2.0.0",
 ]
 
 [dependency-groups]

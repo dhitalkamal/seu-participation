@@ -33,7 +33,6 @@ from apps.participation.application.use_cases.list_my_registrations import (
 )
 from apps.participation.application.use_cases.list_my_shifts import ListMyShiftsUseCase
 from apps.participation.application.use_cases.register import RegisterForEventUseCase
-from apps.participation.infrastructure.plan_client import HttpPlanClient
 from apps.participation.application.use_cases.validate_qr_token import ValidateQRTokenUseCase
 from apps.participation.application.use_cases.verify_passport import VerifyPassportUseCase
 from apps.participation.domain.entities import WaitlistEntryEntity
@@ -41,6 +40,7 @@ from apps.participation.domain.exceptions import InvalidQRTokenError
 from apps.participation.infrastructure.audit_publisher import publish_audit
 from apps.participation.infrastructure.event_client import HttpEventClient
 from apps.participation.infrastructure.models import CustomFormField, TicketTier
+from apps.participation.infrastructure.plan_client import HttpPlanClient
 from apps.participation.infrastructure.publisher import RabbitMQEventPublisher
 from apps.participation.infrastructure.repositories import (
     DjangoCheckInRepository,

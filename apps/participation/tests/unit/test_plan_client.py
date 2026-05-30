@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from apps.participation.infrastructure.plan_client import OrgPlan, PLAN_REGISTRATION_CAPS
+from apps.participation.infrastructure.plan_client import PLAN_REGISTRATION_CAPS, OrgPlan
 
 
 class TestOrgPlan:
