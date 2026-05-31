@@ -1,4 +1,5 @@
 """ASGI entry point for the participation-service."""
+
 from __future__ import annotations
 
 import os

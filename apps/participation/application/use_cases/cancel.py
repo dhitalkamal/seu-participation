@@ -1,0 +1,111 @@
+"""Use case: cancel an existing registration and promote the next waitlist entry."""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import datetime, timezone
+from typing import Any
+
+from apps.participation.application.use_cases.promote_waitlist import (
+    PromoteNextWaitlistUseCase,
+)
+from apps.participation.domain.entities import RegistrationEntity
+from apps.participation.domain.exceptions import (
+    InvalidRegistrationStatusError,
+    RegistrationNotFoundError,
+)
+from apps.participation.domain.repositories import (
+    IEventPublisher,
+    IParticipationContextRepository,
+    IRegistrationRepository,
+    IWaitlistRepository,
+)
+
+logger = logging.getLogger(__name__)
+
+# ! exactly these statuses are cancellable, no others
+_CANCELLABLE: frozenset[str] = frozenset({"pending", "confirmed", "waitlisted"})
+
+
+def _redis_key(event_id: uuid.UUID) -> str:
+    """Return the Redis capacity key for the given event."""
+    return f"event_capacity:{event_id}"
+
+
+class CancelRegistrationUseCase:
+    """Cancel a registration and offer the freed slot to the next person in the waitlist."""
+
+    def __init__(
+        self,
+        reg_repo: IRegistrationRepository,
+        waitlist_repo: IWaitlistRepository,
+        publisher: IEventPublisher | None = None,
+        context_repo: IParticipationContextRepository | None = None,
+        redis_client: Any | None = None,
+    ) -> None:
+        self._regs = reg_repo
+        self._waitlist = waitlist_repo
+        self._publisher = publisher
+        self._context = context_repo
+        self._redis = redis_client
+
+    def execute(
+        self, *, registration_id: uuid.UUID, user_id: uuid.UUID, email: str = ""
+    ) -> RegistrationEntity:
+        """
+        Validate ownership and status, then cancel and offer slot to next waitlist entry.
+
+        @param registration_id - the registration to cancel
+        @param user_id - UUID from JWT; must match registration.user_id
+        @param email - user email from JWT claims, forwarded to domain events for notifications
+        @returns the cancelled RegistrationEntity
+        @raises RegistrationNotFoundError if not found or not owned by user
+        @raises InvalidRegistrationStatusError if status is not cancellable
+        """
+        registration = self._regs.get_by_id(registration_id)
+
+        # * raise not-found rather than forbidden to avoid leaking registration existence
+        if registration.user_id != user_id:
+            raise RegistrationNotFoundError("Registration not found.")
+
+        if registration.status not in _CANCELLABLE:
+            raise InvalidRegistrationStatusError(
+                f"Cannot cancel a registration with status '{registration.status}'."
+            )
+
+        now = datetime.now(timezone.utc)
+        registration.status = "cancelled"
+        registration.cancelled_at = now
+        registration.updated_at = now
+        self._regs.update(registration)
+
+        if self._context is not None:
+            self._context.delete_context(registration.event_id, user_id)
+
+        # * promote the next pending waitlist entry to offered (24h acceptance window)
+        if self._publisher is not None:
+            PromoteNextWaitlistUseCase(
+                waitlist_repo=self._waitlist, publisher=self._publisher
+            ).execute(event_id=registration.event_id)
+
+        if self._publisher is not None:
+            self._publisher.publish(
+                routing_key="participation.registration.cancelled",
+                payload={
+                    "user_id": str(user_id),
+                    "event_id": str(registration.event_id),
+                    "registration_id": str(registration_id),
+                    "registration_code": registration.registration_code,
+                    "email": email,
+                },
+            )
+
+        # atomically decrement Redis counter; failure is non-fatal
+        if self._redis is not None:
+            try:
+                self._redis.decr(_redis_key(registration.event_id))
+            except Exception:
+                logger.warning("Redis DECR failed for event_capacity:%s", registration.event_id)
+
+        return registration
