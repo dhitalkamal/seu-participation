@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 
 from apps.common.api.responses import created_response, error_response, success_response
 from apps.common.health import check_database, check_rabbitmq, check_redis
-from apps.common.permissions import IsOrgManager, IsOrgMember
+from apps.common.permissions import IsOrgManager
 from apps.participation.application.use_cases.accept_transfer import AcceptTransferUseCase
 from apps.participation.application.use_cases.batch_checkin import BatchCheckInUseCase
 from apps.participation.application.use_cases.cancel import CancelRegistrationUseCase
@@ -459,8 +459,7 @@ class MyShiftsView(APIView):
 class EventCheckInStatsView(APIView):
     """Return live check-in stats for a specific event (volunteer dashboard)."""
 
-    # org_id is read from query_params["organization_id"] by IsOrgMember
-    permission_classes = [IsAuthenticated, IsOrgMember]
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Volunteer"],
