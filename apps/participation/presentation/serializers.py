@@ -25,7 +25,8 @@ class CheckInSerializer(serializers.Serializer):
 
     # max_length is large enough to hold an AES-256-GCM base64 encrypted QR token
     registration_code = serializers.CharField(max_length=512)
-    method = serializers.ChoiceField(choices=["qr_code", "manual"])
+    # frontend sends "qr" or "manual"; kept as free-form to avoid breaking scanner variants
+    method = serializers.CharField(max_length=32, default="manual", required=False)
     # event_id is required when registration_code is an encrypted QR token
     event_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 

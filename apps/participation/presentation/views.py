@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
@@ -507,8 +508,13 @@ class QRTokenView(APIView):
                 request=request,
             )
         token = _GEN_QR_UC().execute(registration=reg)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=26)).isoformat()
         return success_response(
-            {"token": token, "registration_id": str(registration_id)},
+            {
+                "token": token,
+                "registration_id": str(registration_id),
+                "expires_at": expires_at,
+            },
             request=request,
         )
 
