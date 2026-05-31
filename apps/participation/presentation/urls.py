@@ -10,7 +10,10 @@ from .views import (
     CancelRegistrationView,
     CancelTransferView,
     CheckInView,
+    CustomFormFieldListCreateView,
     EventCheckInStatsView,
+    EventRegistrationsView,
+    EventWaitlistView,
     HealthCheckView,
     InitiateTransferView,
     InternalParticipationContextView,
@@ -101,5 +104,20 @@ urlpatterns: list[URLPattern] = [
         "events/<uuid:event_id>/ticket-tiers/<uuid:tier_id>/",
         TicketTierDetailView.as_view(),
         name="ticket-tier-detail",
+    ),
+    path(
+        "events/<uuid:event_id>/custom-fields/",
+        CustomFormFieldListCreateView.as_view(),
+        name="custom-form-field-list-create",
+    ),
+    path(
+        "events/<uuid:event_id>/waitlist/",
+        EventWaitlistView.as_view(),
+        name="event-waitlist",
+    ),
+    path(
+        "events/<uuid:event_id>/registrations/",
+        EventRegistrationsView.as_view(),
+        name="event-registrations",
     ),
 ]
