@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
@@ -39,7 +40,12 @@ from apps.participation.domain.entities import WaitlistEntryEntity
 from apps.participation.domain.exceptions import InvalidQRTokenError
 from apps.participation.infrastructure.audit_publisher import publish_audit
 from apps.participation.infrastructure.event_client import HttpEventClient
-from apps.participation.infrastructure.models import CustomFormField, TicketTier
+from apps.participation.infrastructure.models import (
+    CustomFormField,
+    Registration,
+    TicketTier,
+    WaitlistEntry,
+)
 from apps.participation.infrastructure.plan_client import HttpPlanClient
 from apps.participation.infrastructure.publisher import RabbitMQEventPublisher
 from apps.participation.infrastructure.repositories import (
@@ -502,8 +508,13 @@ class QRTokenView(APIView):
                 request=request,
             )
         token = _GEN_QR_UC().execute(registration=reg)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=26)).isoformat()
         return success_response(
-            {"token": token, "registration_id": str(registration_id)},
+            {
+                "token": token,
+                "registration_id": str(registration_id),
+                "expires_at": expires_at,
+            },
             request=request,
         )
 
@@ -1182,3 +1193,75 @@ class WalletPassView(APIView):
             },
             request=request,
         )
+
+
+# * organizer-scoped event views
+
+
+class EventWaitlistView(APIView):
+    """List all waitlist entries for a given event (organizer view)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Organizer"],
+        summary="List waitlist entries for an event",
+        description=(
+            "Returns all waitlist entries for the specified event, ordered by position. "
+            "Intended for organizers inspecting their event waitlist."
+        ),
+        responses={
+            200: OpenApiResponse(description="List of waitlist entries."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+        },
+    )
+    def get(self, request: Request, event_id: _UUID) -> Response:
+        """Return every waitlist entry for the event ordered by queue position."""
+        entries = WaitlistEntry.objects.filter(event_id=event_id).order_by("position")
+        data = [
+            {
+                "id": str(e.id),
+                "user_id": str(e.user_id),
+                "event_id": str(e.event_id),
+                "status": e.status,
+                "position": e.position,
+                "created_at": e.created_at.isoformat(),
+            }
+            for e in entries
+        ]
+        return success_response(data, request=request)
+
+
+class EventRegistrationsView(APIView):
+    """List all registrations for a given event (organizer view)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Organizer"],
+        summary="List registrations for an event",
+        description=(
+            "Returns all registrations for the specified event, newest first. "
+            "Intended for organizers who need a full attendee list."
+        ),
+        responses={
+            200: OpenApiResponse(description="List of registrations for the event."),
+            401: OpenApiResponse(description="Missing or invalid JWT."),
+        },
+    )
+    def get(self, request: Request, event_id: _UUID) -> Response:
+        """Return every registration for the event ordered by creation time descending."""
+        registrations = Registration.objects.filter(event_id=event_id).order_by("-created_at")
+        data = [
+            {
+                "id": str(r.id),
+                "user_id": str(r.user_id),
+                "event_id": str(r.event_id),
+                "status": r.status,
+                "ticket_tier": None,
+                "registered_at": r.created_at.isoformat(),
+                "checked_in_at": r.checked_in_at.isoformat() if r.checked_in_at else None,
+            }
+            for r in registrations
+        ]
+        return success_response(data, request=request)

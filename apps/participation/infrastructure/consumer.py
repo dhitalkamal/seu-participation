@@ -162,9 +162,82 @@ def _handle_volunteer_approved(payload: dict) -> None:
         )
 
 
+def _handle_order_failed(payload: dict) -> None:
+    """Mark pending registration as failed when payment fails."""
+    registration_id_str = payload.get("registration_id")
+    if not registration_id_str or registration_id_str == "None":
+        logger.info("payment.order.failed has no registration_id, nothing to update.")
+        return
+
+    repo = DjangoRegistrationRepository()
+    try:
+        reg = repo.get_by_id(uuid.UUID(registration_id_str))
+        if reg.status == "pending":
+            reg.status = "cancelled"
+            repo.update(reg)
+            logger.info("Registration %s cancelled after payment failure.", registration_id_str)
+        else:
+            logger.info(
+                "Registration %s status is %s, not pending - skipping.",
+                registration_id_str,
+                reg.status,
+            )
+    except Exception:
+        logger.exception(
+            "Failed to cancel registration %s after payment failure.", registration_id_str
+        )
+
+
+def _handle_volunteer_rejected(payload: dict) -> None:
+    """Remove volunteer context when application is rejected."""
+    user_id_str = payload.get("user_id")
+    event_id_str = payload.get("event_id")
+    if not user_id_str or not event_id_str:
+        logger.warning("volunteer.application.rejected missing user_id or event_id: %s", payload)
+        return
+
+    try:
+        context_repo = DjangoParticipationContextRepository()
+        context_repo.set_context(uuid.UUID(event_id_str), uuid.UUID(user_id_str), "attendee")
+        logger.info(
+            "Volunteer context reverted to attendee for user %s on event %s.",
+            user_id_str,
+            event_id_str,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to revert volunteer context for user %s on event %s.", user_id_str, event_id_str
+        )
+
+
+def _handle_volunteer_cancelled(payload: dict) -> None:
+    """Remove volunteer context when application is cancelled."""
+    user_id_str = payload.get("user_id")
+    event_id_str = payload.get("event_id")
+    if not user_id_str or not event_id_str:
+        logger.warning("volunteer.application.cancelled missing user_id or event_id: %s", payload)
+        return
+
+    try:
+        context_repo = DjangoParticipationContextRepository()
+        context_repo.set_context(uuid.UUID(event_id_str), uuid.UUID(user_id_str), "attendee")
+        logger.info(
+            "Volunteer context reverted to attendee for user %s on event %s.",
+            user_id_str,
+            event_id_str,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to revert volunteer context for user %s on event %s.", user_id_str, event_id_str
+        )
+
+
 _HANDLERS: dict = {
     "payment.order.completed": _handle_order_completed,
+    "payment.order.failed": _handle_order_failed,
     "volunteer.application.approved": _handle_volunteer_approved,
+    "volunteer.application.rejected": _handle_volunteer_rejected,
+    "volunteer.application.cancelled": _handle_volunteer_cancelled,
 }
 
 
@@ -183,10 +256,10 @@ def _handle_message(
             handler(payload)
         else:
             logger.debug("No handler for event %s, acking.", event_name)
-    except Exception:
-        logger.exception("Error processing event %s.", event_name)
-    finally:
         channel.basic_ack(delivery_tag=method.delivery_tag)
+    except Exception:
+        logger.exception("Error processing event %s, sending to dead-letter.", event_name)
+        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 
 def start_consumer() -> None:
